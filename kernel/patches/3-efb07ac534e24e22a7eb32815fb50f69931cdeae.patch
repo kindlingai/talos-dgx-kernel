@@ -1,0 +1,111 @@
+From efb07ac534e24e22a7eb32815fb50f69931cdeae Mon Sep 17 00:00:00 2001
+From: Jeremy Linton <jeremy.linton@arm.com>
+Date: Sun, 24 Aug 2025 22:34:18 -0500
+Subject: [PATCH] arm64: probes: Add GCS support to bl/blr/ret
+
+The arm64 probe simulation doesn't currently have logic in place
+to deal with GCS and this results in core dumps if probes are inserted
+at control flow locations. Fix-up bl, blr and ret to manipulate the
+shadow stack as needed.
+
+While we manipulate and validate the shadow stack correctly, the
+hardware provides additional security by only allowing GCS operations
+against pages which are marked to support GCS. For writing there is
+gcssttr() which enforces this, but there isn't an equivalent for
+reading. This means that uprobe users should be aware that probing on
+control flow instructions which require reading the shadow stack (ex:
+ret) offers lower security guarantees than what is achieved without
+the uprobe active.
+
+Signed-off-by: Jeremy Linton <jeremy.linton@arm.com>
+Reviewed-by: Catalin Marinas <catalin.marinas@arm.com>
+Signed-off-by: Will Deacon <will@kernel.org>
+---
+ arch/arm64/kernel/probes/simulate-insn.c | 44 +++++++++++++++++++-----
+ 1 file changed, 35 insertions(+), 9 deletions(-)
+
+diff --git a/arch/arm64/kernel/probes/simulate-insn.c b/arch/arm64/kernel/probes/simulate-insn.c
+index 09a0b36122d010..97ed4db7541796 100644
+--- a/arch/arm64/kernel/probes/simulate-insn.c
++++ b/arch/arm64/kernel/probes/simulate-insn.c
+@@ -13,6 +13,7 @@
+ #include <asm/traps.h>
+ 
+ #include "simulate-insn.h"
++#include "asm/gcs.h"
+ 
+ #define bbl_displacement(insn)		\
+ 	sign_extend32(((insn) & 0x3ffffff) << 2, 27)
+@@ -49,6 +50,21 @@ static inline u32 get_w_reg(struct pt_regs *regs, int reg)
+ 	return lower_32_bits(pt_regs_read_reg(regs, reg));
+ }
+ 
++static inline int update_lr(struct pt_regs *regs, long addr)
++{
++	int err = 0;
++
++	if (user_mode(regs) && task_gcs_el0_enabled(current)) {
++		push_user_gcs(addr, &err);
++		if (err) {
++			force_sig(SIGSEGV);
++			return err;
++		}
++	}
++	procedure_link_pointer_set(regs, addr);
++	return err;
++}
++
+ static bool __kprobes check_cbz(u32 opcode, struct pt_regs *regs)
+ {
+ 	int xn = opcode & 0x1f;
+@@ -107,9 +123,9 @@ simulate_b_bl(u32 opcode, long addr, struct pt_regs *regs)
+ {
+ 	int disp = bbl_displacement(opcode);
+ 
+-	/* Link register is x30 */
+ 	if (opcode & (1 << 31))
+-		set_x_reg(regs, 30, addr + 4);
++		if (update_lr(regs, addr + 4))
++			return;
+ 
+ 	instruction_pointer_set(regs, addr + disp);
+ }
+@@ -129,21 +145,31 @@ void __kprobes
+ simulate_br_blr(u32 opcode, long addr, struct pt_regs *regs)
+ {
+ 	int xn = (opcode >> 5) & 0x1f;
++	int b_target = get_x_reg(regs, xn);
+ 
+-	/* update pc first in case we're doing a "blr lr" */
+-	instruction_pointer_set(regs, get_x_reg(regs, xn));
+-
+-	/* Link register is x30 */
+ 	if (((opcode >> 21) & 0x3) == 1)
+-		set_x_reg(regs, 30, addr + 4);
++		if (update_lr(regs, addr + 4))
++			return;
++
++	instruction_pointer_set(regs, b_target);
+ }
+ 
+ void __kprobes
+ simulate_ret(u32 opcode, long addr, struct pt_regs *regs)
+ {
++	u64 ret_addr;
++	int err = 0;
+ 	int xn = (opcode >> 5) & 0x1f;
+-
+-	instruction_pointer_set(regs, get_x_reg(regs, xn));
++	unsigned long r_target = get_x_reg(regs, xn);
++
++	if (user_mode(regs) && task_gcs_el0_enabled(current)) {
++		ret_addr = pop_user_gcs(&err);
++		if (err || ret_addr != r_target) {
++			force_sig(SIGSEGV);
++			return;
++		}
++	}
++	instruction_pointer_set(regs, r_target);
+ }
+ 
+ void __kprobes

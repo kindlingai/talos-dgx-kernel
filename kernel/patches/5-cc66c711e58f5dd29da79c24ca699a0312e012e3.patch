@@ -1,0 +1,27 @@
+From cc66c711e58f5dd29da79c24ca699a0312e012e3 Mon Sep 17 00:00:00 2001
+From: Jeremy Linton <jeremy.linton@arm.com>
+Date: Sun, 24 Aug 2025 22:34:20 -0500
+Subject: [PATCH] arm64: Kconfig: Remove GCS restrictions on UPROBES
+
+Now that the uprobe paths have been made GCS compatible
+drop the Kconfig restriction.
+
+Signed-off-by: Jeremy Linton <jeremy.linton@arm.com>
+Acked-by: Catalin Marinas <catalin.marinas@arm.com>
+Signed-off-by: Will Deacon <will@kernel.org>
+---
+ arch/arm64/Kconfig | 1 -
+ 1 file changed, 1 deletion(-)
+
+diff --git a/arch/arm64/Kconfig b/arch/arm64/Kconfig
+index e9bbfacc35a64d..c61572bbe59b7e 100644
+--- a/arch/arm64/Kconfig
++++ b/arch/arm64/Kconfig
+@@ -2225,7 +2225,6 @@ config ARM64_GCS
+ 	default y
+ 	select ARCH_HAS_USER_SHADOW_STACK
+ 	select ARCH_USES_HIGH_VMA_FLAGS
+-	depends on !UPROBES
+ 	help
+ 	  Guarded Control Stack (GCS) provides support for a separate
+ 	  stack with restricted access which contains only return

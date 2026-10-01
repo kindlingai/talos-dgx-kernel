@@ -1,0 +1,80 @@
+From 4a601714bb24926507b2051c4a95f07e0e142004 Mon Sep 17 00:00:00 2001
+From: Jeremy Linton <jeremy.linton@arm.com>
+Date: Sun, 24 Aug 2025 22:34:19 -0500
+Subject: [PATCH] arm64: uprobes: Add GCS support to uretprobes
+
+Ret probes work by changing the value in the link register at
+the probe location to return to the probe rather than the calling
+routine. Thus the GCS needs to be updated with this address as well.
+
+Since its possible to insert probes at locations where the
+current value of the LR doesn't match the GCS state this needs
+to be detected and handled in order to maintain the existing
+no-fault behavior.
+
+Co-developed-by: Steve Capper <steve.capper@arm.com>
+Signed-off-by: Steve Capper <steve.capper@arm.com>
+Signed-off-by: Jeremy Linton <jeremy.linton@arm.com>
+Reviewed-by: Catalin Marinas <catalin.marinas@arm.com>
+[will: Add '__force' to gcspr casts in arch_uretprobe_hijack_return_addr()]
+Signed-off-by: Will Deacon <will@kernel.org>
+---
+ arch/arm64/kernel/probes/uprobes.c | 33 ++++++++++++++++++++++++++++++
+ 1 file changed, 33 insertions(+)
+
+diff --git a/arch/arm64/kernel/probes/uprobes.c b/arch/arm64/kernel/probes/uprobes.c
+index 1f91fd2a818798..2799bdb2fb820b 100644
+--- a/arch/arm64/kernel/probes/uprobes.c
++++ b/arch/arm64/kernel/probes/uprobes.c
+@@ -6,6 +6,7 @@
+ #include <linux/ptrace.h>
+ #include <linux/uprobes.h>
+ #include <asm/cacheflush.h>
++#include <asm/gcs.h>
+ 
+ #include "decode-insn.h"
+ 
+@@ -159,11 +160,43 @@ arch_uretprobe_hijack_return_addr(unsigned long trampoline_vaddr,
+ 				  struct pt_regs *regs)
+ {
+ 	unsigned long orig_ret_vaddr;
++	unsigned long gcs_ret_vaddr;
++	int err = 0;
++	u64 gcspr;
+ 
+ 	orig_ret_vaddr = procedure_link_pointer(regs);
++
++	if (task_gcs_el0_enabled(current)) {
++		gcspr = read_sysreg_s(SYS_GCSPR_EL0);
++		gcs_ret_vaddr = get_user_gcs((__force unsigned long __user *)gcspr, &err);
++		if (err) {
++			force_sig(SIGSEGV);
++			goto out;
++		}
++
++		/*
++		 * If the LR and GCS return addr don't match, then some kind of PAC
++		 * signing or control flow occurred since entering the probed function.
++		 * Likely because the user is attempting to retprobe on an instruction
++		 * that isn't a function boundary or inside a leaf function. Explicitly
++		 * abort this retprobe because it will generate a GCS exception.
++		 */
++		if (gcs_ret_vaddr != orig_ret_vaddr) {
++			orig_ret_vaddr = -1;
++			goto out;
++		}
++
++		put_user_gcs(trampoline_vaddr, (__force unsigned long __user *)gcspr, &err);
++		if (err) {
++			force_sig(SIGSEGV);
++			goto out;
++		}
++	}
++
+ 	/* Replace the return addr with trampoline addr */
+ 	procedure_link_pointer_set(regs, trampoline_vaddr);
+ 
++out:
+ 	return orig_ret_vaddr;
+ }
+ 

@@ -1,0 +1,39 @@
+From ea87c5536aa8c2b5bcd2fb482df6f11e5517df06 Mon Sep 17 00:00:00 2001
+From: Jeremy Linton <jeremy.linton@arm.com>
+Date: Thu, 18 Sep 2025 12:54:24 -0500
+Subject: [PATCH] arm64: probes: Fix incorrect bl/blr address and register
+ usage
+
+The pt_regs registers are 64-bit on arm64, and should be u64 when
+manipulated. Correct this so that we aren't truncating the address
+during br/blr sequences.
+
+Fixes: efb07ac534e2 ("arm64: probes: Add GCS support to bl/blr/ret")
+Signed-off-by: Jeremy Linton <jeremy.linton@arm.com>
+Signed-off-by: Will Deacon <will@kernel.org>
+---
+ arch/arm64/kernel/probes/simulate-insn.c | 4 ++--
+ 1 file changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/arch/arm64/kernel/probes/simulate-insn.c b/arch/arm64/kernel/probes/simulate-insn.c
+index 97ed4db7541796..89fbeb32107e31 100644
+--- a/arch/arm64/kernel/probes/simulate-insn.c
++++ b/arch/arm64/kernel/probes/simulate-insn.c
+@@ -145,7 +145,7 @@ void __kprobes
+ simulate_br_blr(u32 opcode, long addr, struct pt_regs *regs)
+ {
+ 	int xn = (opcode >> 5) & 0x1f;
+-	int b_target = get_x_reg(regs, xn);
++	u64 b_target = get_x_reg(regs, xn);
+ 
+ 	if (((opcode >> 21) & 0x3) == 1)
+ 		if (update_lr(regs, addr + 4))
+@@ -160,7 +160,7 @@ simulate_ret(u32 opcode, long addr, struct pt_regs *regs)
+ 	u64 ret_addr;
+ 	int err = 0;
+ 	int xn = (opcode >> 5) & 0x1f;
+-	unsigned long r_target = get_x_reg(regs, xn);
++	u64 r_target = get_x_reg(regs, xn);
+ 
+ 	if (user_mode(regs) && task_gcs_el0_enabled(current)) {
+ 		ret_addr = pop_user_gcs(&err);

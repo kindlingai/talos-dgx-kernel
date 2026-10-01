@@ -1,0 +1,78 @@
+From 47687aa4d9c91a9d9b1dbae40c242cd291030bd9 Mon Sep 17 00:00:00 2001
+From: Jeremy Linton <jeremy.linton@arm.com>
+Date: Sun, 24 Aug 2025 22:34:15 -0500
+Subject: [PATCH] arm64: probes: Break ret out from bl/blr
+
+Prepare for GCS by breaking RET out into its own function, where
+it makes more sense to encapsulate the new behavior independent
+from the branch instructions.
+
+Signed-off-by: Jeremy Linton <jeremy.linton@arm.com>
+Reviewed-by: Catalin Marinas <catalin.marinas@arm.com>
+Signed-off-by: Will Deacon <will@kernel.org>
+---
+ arch/arm64/kernel/probes/decode-insn.c   |  7 ++++---
+ arch/arm64/kernel/probes/simulate-insn.c | 10 +++++++++-
+ arch/arm64/kernel/probes/simulate-insn.h |  3 ++-
+ 3 files changed, 15 insertions(+), 5 deletions(-)
+
+diff --git a/arch/arm64/kernel/probes/decode-insn.c b/arch/arm64/kernel/probes/decode-insn.c
+index 6438bf62e753f3..4137cc5ef031f6 100644
+--- a/arch/arm64/kernel/probes/decode-insn.c
++++ b/arch/arm64/kernel/probes/decode-insn.c
+@@ -108,9 +108,10 @@ arm_probe_decode_insn(u32 insn, struct arch_probe_insn *api)
+ 	    aarch64_insn_is_bl(insn)) {
+ 		api->handler = simulate_b_bl;
+ 	} else if (aarch64_insn_is_br(insn) ||
+-	    aarch64_insn_is_blr(insn) ||
+-	    aarch64_insn_is_ret(insn)) {
+-		api->handler = simulate_br_blr_ret;
++		aarch64_insn_is_blr(insn)) {
++		api->handler = simulate_br_blr;
++	} else if (aarch64_insn_is_ret(insn)) {
++		api->handler = simulate_ret;
+ 	} else {
+ 		/*
+ 		 * Instruction cannot be stepped out-of-line and we don't
+diff --git a/arch/arm64/kernel/probes/simulate-insn.c b/arch/arm64/kernel/probes/simulate-insn.c
+index 4c6d2d712fbd3c..09a0b36122d010 100644
+--- a/arch/arm64/kernel/probes/simulate-insn.c
++++ b/arch/arm64/kernel/probes/simulate-insn.c
+@@ -126,7 +126,7 @@ simulate_b_cond(u32 opcode, long addr, struct pt_regs *regs)
+ }
+ 
+ void __kprobes
+-simulate_br_blr_ret(u32 opcode, long addr, struct pt_regs *regs)
++simulate_br_blr(u32 opcode, long addr, struct pt_regs *regs)
+ {
+ 	int xn = (opcode >> 5) & 0x1f;
+ 
+@@ -138,6 +138,14 @@ simulate_br_blr_ret(u32 opcode, long addr, struct pt_regs *regs)
+ 		set_x_reg(regs, 30, addr + 4);
+ }
+ 
++void __kprobes
++simulate_ret(u32 opcode, long addr, struct pt_regs *regs)
++{
++	int xn = (opcode >> 5) & 0x1f;
++
++	instruction_pointer_set(regs, get_x_reg(regs, xn));
++}
++
+ void __kprobes
+ simulate_cbz_cbnz(u32 opcode, long addr, struct pt_regs *regs)
+ {
+diff --git a/arch/arm64/kernel/probes/simulate-insn.h b/arch/arm64/kernel/probes/simulate-insn.h
+index efb2803ec943d6..9e772a292d565d 100644
+--- a/arch/arm64/kernel/probes/simulate-insn.h
++++ b/arch/arm64/kernel/probes/simulate-insn.h
+@@ -11,7 +11,8 @@
+ void simulate_adr_adrp(u32 opcode, long addr, struct pt_regs *regs);
+ void simulate_b_bl(u32 opcode, long addr, struct pt_regs *regs);
+ void simulate_b_cond(u32 opcode, long addr, struct pt_regs *regs);
+-void simulate_br_blr_ret(u32 opcode, long addr, struct pt_regs *regs);
++void simulate_br_blr(u32 opcode, long addr, struct pt_regs *regs);
++void simulate_ret(u32 opcode, long addr, struct pt_regs *regs);
+ void simulate_cbz_cbnz(u32 opcode, long addr, struct pt_regs *regs);
+ void simulate_tbz_tbnz(u32 opcode, long addr, struct pt_regs *regs);
+ void simulate_ldr_literal(u32 opcode, long addr, struct pt_regs *regs);

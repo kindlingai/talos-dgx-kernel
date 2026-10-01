@@ -1,0 +1,116 @@
+{
+  "kernel_release": "6.17.13-talos-dgx1022-buildonly",
+  "source_date_epoch": 1789481248,
+  "canonical_commit": "12ecf28e667f47335166fa29efe0cc906dc02fb9",
+  "dsc_signer_fingerprint": "AE7D31FF19C227A5D7D425B1A08D6CD18E2BC802",
+  "config_sha256": "35c82c0c75abb81603fdf96d037cccec107edef248dd75519b1b4e3e16f45673",
+  "downloads": [
+    {
+      "filename": "linux-nvidia-6.17_6.17.0.orig.tar.gz",
+      "url": "https://ports.ubuntu.com/ubuntu-ports/pool/main/l/linux-nvidia-6.17/linux-nvidia-6.17_6.17.0.orig.tar.gz",
+      "sha256": "a5623ec5af79da8807e1467e43a1888461c7a445fb1e17533fe45f0fdf4394e3"
+    },
+    {
+      "filename": "linux-nvidia-6.17_6.17.0-1022.22.diff.gz",
+      "url": "https://launchpad.net/ubuntu/+archive/primary/+sourcefiles/linux-nvidia-6.17/6.17.0-1022.22/linux-nvidia-6.17_6.17.0-1022.22.diff.gz",
+      "sha256": "10708bd7d312c9c00627dca7743dc0a8dfb22649084a8775424afbe68095c941"
+    },
+    {
+      "filename": "linux-nvidia-6.17_6.17.0-1022.22.dsc",
+      "url": "https://launchpad.net/ubuntu/+archive/primary/+sourcefiles/linux-nvidia-6.17/6.17.0-1022.22/linux-nvidia-6.17_6.17.0-1022.22.dsc",
+      "sha256": "fa8525bfc6b38b91911ab2721d43f99297f08887d9ee15e7f8422287add7afac"
+    },
+    {
+      "filename": "nvidia-580.178.04.tar.xz",
+      "url": "https://developer.download.nvidia.com/compute/nvidia-driver/redist/nvidia_driver/linux-sbsa/nvidia_driver-linux-sbsa-580.178.04-archive.tar.xz",
+      "sha256": "8e55dfbe85b1aa9fbd2e323ed203470ebf6001f614d1f8cb4fa0671ea979a557"
+    },
+    {
+      "filename": "gds-v2.29.4.tar.gz",
+      "url": "https://codeload.github.com/NVIDIA/gds-nvidia-fs/tar.gz/refs/tags/v2.29.4",
+      "sha256": "6936aeacfb519a1d6fe66e16281799c20ffe177c2022f831d29f90895f11e339"
+    }
+  ],
+  "patches": [
+    {
+      "file": "0004-PCI-prevent-shrink-bridge-window.patch",
+      "sha256": "5f1c43e5e3fb61ade9c3da2b8b22eab88e5267d777cd5b59b8616c924a7ae6b1"
+    },
+    {
+      "file": "0007-tun-dst-unclone.patch",
+      "sha256": "5cdf9dee9ca66159b2cdf7efe01dbf3aca213e376bc212cf87a9f3553d27d47c"
+    },
+    {
+      "file": "0012-libceph-generalize-ceph_x_encrypt_offset-and-ceph_x_e.patch",
+      "sha256": "e02c6acfda9b94b726e23c340840eb0eadbdc930442cd91ba257483ab810e9dd"
+    },
+    {
+      "file": "0017-security-lockdown-lock-down-the-kernel-in-EFI-Secure-.patch",
+      "sha256": "11acbabc4e00e3f1433b41c27ac5b0953881736e2b1b6323810bb12adb8e87db"
+    },
+    {
+      "file": "ac431d597a9bdfc2ba6b314813f29a6ef2b4a3bf.patch",
+      "sha256": "cd619c2a4c9a927bbc27320baae393b3f0c3ac9482187ad10f385499911033ea"
+    },
+    {
+      "file": "27c0a7b05d13a0dc54ed0b95fc12218210fdea1a.patch",
+      "sha256": "96f55e26264eaf10081d0c9d30e7f633b31bcda775896d82a58dfbdf2ae24b16"
+    },
+    {
+      "file": "6c9dddeb582fde005360f4fe02c760d45ca05fb5.patch",
+      "sha256": "8f2c3d807e1dc62636e22c362e8e3c487042e7f59338b0dfbdf78b2c6378f843"
+    },
+    {
+      "file": "f7d53dd3f267e46a784f219a75072f2f400d42b9.patch",
+      "sha256": "9932cd3ce1333c1e6f34609cd1d5fd3aa95de9be1fc322b67a81ab2029047a72"
+    },
+    {
+      "file": "0013-libceph-introduce-ceph_crypto_key_prepare.patch",
+      "sha256": "7d0e2218872704ad1cff376ff6398ec74e1e145f6a5689be19161313aaec8cce"
+    },
+    {
+      "file": "0014-libceph-add-support-for-CEPH_CRYPTO_AES256KRB5.patch",
+      "sha256": "fa9330b834135747548727762214ae9474821cbff1442bea18c11f51996a890f"
+    },
+    {
+      "file": "0015-libceph-adapt-ceph_x_challenge_blob-hashing-and-msgr1.patch",
+      "sha256": "a402fb1e60a6c64144fced2b9bdef39e9c4380fa2b5ab1c0a5d044a318c5176d"
+    },
+    {
+      "file": "0016-libceph-Fix-potential-out-of-bounds-access-in-__ceph_.patch",
+      "sha256": "e51a5739acf505f339fa5c715d1bdd061f2d2a14073dd2c13a92f51764234921"
+    },
+    {
+      "file": "0-47687aa4d9c91a9d9b1dbae40c242cd291030bd9.patch",
+      "sha256": "6879186f7298c0d575d724baf8ffd787493f442e35b049a94e6c89881de2ab2a"
+    },
+    {
+      "file": "1-ea920b50ac9ff13ef0282428bd80395ea134a26c.patch",
+      "sha256": "3b1d6113ac0b67abcd8151bff8be4c794175f14c11f2a2068ceb95cdac34861c"
+    },
+    {
+      "file": "2-9cd2a7f1180f9b6fe5214abc90eaf5c053f545ee.patch",
+      "sha256": "1cdf66c967ef9a13062d6f2586ac14b84a0cdbcc834bc3989dab1411ad5e28a2"
+    },
+    {
+      "file": "3-efb07ac534e24e22a7eb32815fb50f69931cdeae.patch",
+      "sha256": "f3b1b759de989c74ec35e1c6b98d0a51a88adb7dada266ec079ff649cb7efde2"
+    },
+    {
+      "file": "4-4a601714bb24926507b2051c4a95f07e0e142004.patch",
+      "sha256": "45efc117bd9fe64f4d2f3d0ac4c9cbd8f210442bde72be2efd5220e7d5c5b900"
+    },
+    {
+      "file": "5-cc66c711e58f5dd29da79c24ca699a0312e012e3.patch",
+      "sha256": "7ea849327f94410c649fcb64dea228734d6320af7f4d0114391a6c44c3a607ff"
+    },
+    {
+      "file": "6-ea87c5536aa8c2b5bcd2fb482df6f11e5517df06.patch",
+      "sha256": "a3c7ed319d8fb4caf03022a3e42892eabcc6f44fedb30f21a149a70756e21ae7"
+    },
+    {
+      "file": "security-backport-combined.patch",
+      "sha256": "1306cbbc65ecdaaa0589fd5d10bf5c3edf3f7aa715ed56c3600544bc86a91294"
+    }
+  ]
+}

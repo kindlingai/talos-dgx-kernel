@@ -1,0 +1,1057 @@
+--- a/arch/arm64/Kconfig
++++ b/arch/arm64/Kconfig
+@@ -1154,6 +1154,44 @@
+ 
+ 	  If unsure, say Y.
+ 
++config ARM64_ERRATUM_4118414
++	bool "Various: Completion of affected memory accesses might not be guaranteed by completion of a TLBI"
++	default y
++	select ARM64_WORKAROUND_REPEAT_TLBI
++	help
++	  This option adds a workaround for the following errata:
++
++	  * ARM C1-Premium erratum 4193780
++	  * ARM C1-Ultra erratum 4193780
++	  * ARM Cortex-A76 erratum 4193800
++	  * ARM Cortex-A76AE erratum 4193801
++	  * ARM Cortex-A77 erratum 4193798
++	  * ARM Cortex-A78 erratum 4193791
++	  * ARM Cortex-A78AE erratum 4193793
++	  * ARM Cortex-A78C erratum 4193794
++	  * ARM Cortex-A710 erratum 4193788
++	  * ARM Cortex-X1 erratum 4193791
++	  * ARM Cortex-X1C erratum 4193792
++	  * ARM Cortex-X2 erratum 4193788
++	  * ARM Cortex-X3 erratum 4193786
++	  * ARM Cortex-X4 erratum 4118414
++	  * ARM Cortex-X925 erratum 4193781
++	  * ARM Neoverse-N1 erratum 4193800
++	  * ARM Neoverse-N2 erratum 4193789
++	  * ARM Neoverse-V1 erratum 4193790
++	  * ARM Neoverse-V2 erratum 4193787
++	  * ARM Neoverse-V3 erratum 4193784
++	  * ARM Neoverse-V3AE erratum 4193784
++	  * Microsoft Azure Cobalt 100 4193789
++	  * NVIDIA Olympus erratum T410-OLY-1029
++
++	  On affected cores, some memory accesses might not be completed by
++	  broadcast TLB invalidation.
++
++	  This issue is also known as CVE-2025-10263.
++
++	  If unsure, say Y.
++
+ config CAVIUM_ERRATUM_22375
+ 	bool "Cavium erratum 22375, 24313"
+ 	default y
+--- a/arch/arm64/include/asm/cputype.h
++++ b/arch/arm64/include/asm/cputype.h
+@@ -97,7 +97,11 @@
+ #define ARM_CPU_PART_NEOVERSE_V3	0xD84
+ #define ARM_CPU_PART_CORTEX_X925	0xD85
+ #define ARM_CPU_PART_CORTEX_A725	0xD87
++#define ARM_CPU_PART_CORTEX_A720AE	0xD89
++#define ARM_CPU_PART_C1_ULTRA		0xD8C
+ #define ARM_CPU_PART_NEOVERSE_N3	0xD8E
++#define ARM_CPU_PART_C1_PRO		0xD8B
++#define ARM_CPU_PART_C1_PREMIUM		0xD90
+ 
+ #define APM_CPU_PART_XGENE		0x000
+ #define APM_CPU_VAR_POTENZA		0x00
+@@ -188,7 +192,11 @@
+ #define MIDR_NEOVERSE_V3 MIDR_CPU_MODEL(ARM_CPU_IMP_ARM, ARM_CPU_PART_NEOVERSE_V3)
+ #define MIDR_CORTEX_X925 MIDR_CPU_MODEL(ARM_CPU_IMP_ARM, ARM_CPU_PART_CORTEX_X925)
+ #define MIDR_CORTEX_A725 MIDR_CPU_MODEL(ARM_CPU_IMP_ARM, ARM_CPU_PART_CORTEX_A725)
++#define MIDR_CORTEX_A720AE MIDR_CPU_MODEL(ARM_CPU_IMP_ARM, ARM_CPU_PART_CORTEX_A720AE)
++#define MIDR_C1_ULTRA MIDR_CPU_MODEL(ARM_CPU_IMP_ARM, ARM_CPU_PART_C1_ULTRA)
+ #define MIDR_NEOVERSE_N3 MIDR_CPU_MODEL(ARM_CPU_IMP_ARM, ARM_CPU_PART_NEOVERSE_N3)
++#define MIDR_C1_PRO MIDR_CPU_MODEL(ARM_CPU_IMP_ARM, ARM_CPU_PART_C1_PRO)
++#define MIDR_C1_PREMIUM MIDR_CPU_MODEL(ARM_CPU_IMP_ARM, ARM_CPU_PART_C1_PREMIUM)
+ #define MIDR_THUNDERX	MIDR_CPU_MODEL(ARM_CPU_IMP_CAVIUM, CAVIUM_CPU_PART_THUNDERX)
+ #define MIDR_THUNDERX_81XX MIDR_CPU_MODEL(ARM_CPU_IMP_CAVIUM, CAVIUM_CPU_PART_THUNDERX_81XX)
+ #define MIDR_THUNDERX_83XX MIDR_CPU_MODEL(ARM_CPU_IMP_CAVIUM, CAVIUM_CPU_PART_THUNDERX_83XX)
+--- a/arch/arm64/kernel/cpu_errata.c
++++ b/arch/arm64/kernel/cpu_errata.c
+@@ -320,7 +320,37 @@
+ 		ERRATA_MIDR_RANGE(MIDR_CORTEX_A510, 0, 0, 1, 1),
+ 	},
+ #endif
+-	{},
++#ifdef CONFIG_ARM64_ERRATUM_4118414
++	{
++		ERRATA_MIDR_RANGE_LIST(((const struct midr_range[]) {
++			MIDR_ALL_VERSIONS(MIDR_C1_PREMIUM),
++			MIDR_ALL_VERSIONS(MIDR_C1_ULTRA),
++			MIDR_ALL_VERSIONS(MIDR_CORTEX_A76),
++			MIDR_ALL_VERSIONS(MIDR_CORTEX_A76AE),
++			MIDR_ALL_VERSIONS(MIDR_CORTEX_A77),
++			MIDR_ALL_VERSIONS(MIDR_CORTEX_A78),
++			MIDR_ALL_VERSIONS(MIDR_CORTEX_A78AE),
++			MIDR_ALL_VERSIONS(MIDR_CORTEX_A78C),
++			MIDR_ALL_VERSIONS(MIDR_CORTEX_A710),
++			MIDR_ALL_VERSIONS(MIDR_CORTEX_X1),
++			MIDR_ALL_VERSIONS(MIDR_CORTEX_X1C),
++			MIDR_ALL_VERSIONS(MIDR_CORTEX_X2),
++			MIDR_ALL_VERSIONS(MIDR_CORTEX_X3),
++			MIDR_ALL_VERSIONS(MIDR_CORTEX_X4),
++			MIDR_ALL_VERSIONS(MIDR_CORTEX_X925),
++			MIDR_ALL_VERSIONS(MIDR_NEOVERSE_N1),
++			MIDR_ALL_VERSIONS(MIDR_NEOVERSE_N2),
++			MIDR_ALL_VERSIONS(MIDR_NEOVERSE_V1),
++			MIDR_ALL_VERSIONS(MIDR_NEOVERSE_V2),
++			MIDR_ALL_VERSIONS(MIDR_NEOVERSE_V3),
++			MIDR_ALL_VERSIONS(MIDR_NEOVERSE_V3AE),
++			MIDR_ALL_VERSIONS(MIDR_NVIDIA_OLYMPUS),
++			MIDR_ALL_VERSIONS(MIDR_MICROSOFT_AZURE_COBALT_100),
++			{}
++		})),
++	},
++#endif
++	{}
+ };
+ #endif
+ 
+@@ -746,7 +776,7 @@
+ #endif
+ #ifdef CONFIG_ARM64_WORKAROUND_REPEAT_TLBI
+ 	{
+-		.desc = "Qualcomm erratum 1009, or ARM erratum 1286807, 2441009",
++		.desc = "Broken broadcast TLBI completion",
+ 		.capability = ARM64_WORKAROUND_REPEAT_TLBI,
+ 		.type = ARM64_CPUCAP_LOCAL_CPU_ERRATUM,
+ 		.matches = cpucap_multi_entry_cap_matches,
+--- a/include/net/netns/sctp.h
++++ b/include/net/netns/sctp.h
+@@ -75,8 +75,8 @@
+ 	/* Whether Cookie Preservative is enabled(1) or not(0) */
+ 	int cookie_preserve_enable;
+ 
+-	/* The namespace default hmac alg */
+-	char *sctp_hmac_alg;
++	/* Whether cookie authentication is enabled(1) or not(0) */
++	int cookie_auth_enable;
+ 
+ 	/* Valid.Cookie.Life	    - 60  seconds  */
+ 	unsigned int valid_cookie_life;
+--- a/include/net/sctp/auth.h
++++ b/include/net/sctp/auth.h
+@@ -22,16 +22,11 @@
+ struct sctp_association;
+ struct sctp_authkey;
+ struct sctp_hmacalgo;
+-struct crypto_shash;
+ 
+-/*
+- * Define a generic struct that will hold all the info
+- * necessary for an HMAC transform
+- */
++/* Defines an HMAC algorithm supported by SCTP chunk authentication */
+ struct sctp_hmac {
+-	__u16 hmac_id;		/* one of the above ids */
+-	char *hmac_name;	/* name for loading */
+-	__u16 hmac_len;		/* length of the signature */
++	__u16 hmac_id;		/* one of SCTP_AUTH_HMAC_ID_* */
++	__u16 hmac_len;		/* length of the HMAC value in bytes */
+ };
+ 
+ /* This is generic structure that containst authentication bytes used
+@@ -78,9 +73,9 @@
+ 				struct sctp_association *asoc,
+ 				gfp_t gfp);
+ int sctp_auth_init_hmacs(struct sctp_endpoint *ep, gfp_t gfp);
+-void sctp_auth_destroy_hmacs(struct crypto_shash *auth_hmacs[]);
+-struct sctp_hmac *sctp_auth_get_hmac(__u16 hmac_id);
+-struct sctp_hmac *sctp_auth_asoc_get_hmac(const struct sctp_association *asoc);
++const struct sctp_hmac *sctp_auth_get_hmac(__u16 hmac_id);
++const struct sctp_hmac *
++sctp_auth_asoc_get_hmac(const struct sctp_association *asoc);
+ void sctp_auth_asoc_set_default_hmac(struct sctp_association *asoc,
+ 				     struct sctp_hmac_algo_param *hmacs);
+ int sctp_auth_asoc_verify_hmac_id(const struct sctp_association *asoc,
+--- a/include/net/sctp/constants.h
++++ b/include/net/sctp/constants.h
+@@ -296,9 +296,8 @@
+ 					 */
+ #define SCTP_DEFAULT_MINSEGMENT 512	/* MTU size ... if no mtu disc */
+ 
+-#define SCTP_SECRET_SIZE 32		/* Number of octets in a 256 bits. */
+-
+-#define SCTP_SIGNATURE_SIZE 20	        /* size of a SLA-1 signature */
++#define SCTP_COOKIE_KEY_SIZE 32	/* size of cookie HMAC key */
++#define SCTP_COOKIE_MAC_SIZE 32	/* size of HMAC field in cookies */
+ 
+ #define SCTP_COOKIE_MULTIPLE 32 /* Pad out our cookie to make our hash
+ 				 * functions simpler to write.
+@@ -417,16 +416,12 @@
+ 	SCTP_AUTH_HMAC_ID_RESERVED_0,
+ 	SCTP_AUTH_HMAC_ID_SHA1,
+ 	SCTP_AUTH_HMAC_ID_RESERVED_2,
+-#if defined (CONFIG_CRYPTO_SHA256) || defined (CONFIG_CRYPTO_SHA256_MODULE)
+ 	SCTP_AUTH_HMAC_ID_SHA256,
+-#endif
+ 	__SCTP_AUTH_HMAC_MAX
+ };
+ 
+ #define SCTP_AUTH_HMAC_ID_MAX	__SCTP_AUTH_HMAC_MAX - 1
+ #define SCTP_AUTH_NUM_HMACS 	__SCTP_AUTH_HMAC_MAX
+-#define SCTP_SHA1_SIG_SIZE 20
+-#define SCTP_SHA256_SIG_SIZE 32
+ 
+ /*  SCTP-AUTH, Section 3.2
+  *     The chunk types for INIT, INIT-ACK, SHUTDOWN-COMPLETE and AUTH chunks
+--- a/include/net/sctp/structs.h
++++ b/include/net/sctp/structs.h
+@@ -32,6 +32,7 @@
+ #ifndef __sctp_structs_h__
+ #define __sctp_structs_h__
+ 
++#include <crypto/sha2.h>
+ #include <linux/ktime.h>
+ #include <linux/generic-radix-tree.h>
+ #include <linux/rhashtable-types.h>
+@@ -68,7 +69,6 @@
+ struct sctp_bind_addr;
+ struct sctp_ulpq;
+ struct sctp_ep_common;
+-struct crypto_shash;
+ struct sctp_stream;
+ 
+ 
+@@ -154,10 +154,6 @@
+ 
+ 	/* PF_ family specific functions.  */
+ 	struct sctp_pf *pf;
+-
+-	/* Access to HMAC transform. */
+-	struct crypto_shash *hmac;
+-	char *sctp_hmac_alg;
+ 
+ 	/* What is our base endpointer? */
+ 	struct sctp_endpoint *ep;
+@@ -227,7 +223,8 @@
+ 		frag_interleave:1,
+ 		recvrcvinfo:1,
+ 		recvnxtinfo:1,
+-		data_ready_signalled:1;
++		data_ready_signalled:1,
++		cookie_auth_enable:1;
+ 
+ 	atomic_t pd_mode;
+ 
+@@ -335,7 +332,7 @@
+ 
+ /* The format of our cookie that we send to our peer. */
+ struct sctp_signed_cookie {
+-	__u8 signature[SCTP_SECRET_SIZE];
++	__u8 mac[SCTP_COOKIE_MAC_SIZE];
+ 	__u32 __pad;		/* force sctp_cookie alignment to 64 bits */
+ 	struct sctp_cookie c;
+ } __packed;
+@@ -1307,32 +1304,14 @@
+ 	/* This is really a list of struct sctp_association entries. */
+ 	struct list_head asocs;
+ 
+-	/* Secret Key: A secret key used by this endpoint to compute
+-	 *	      the MAC.	This SHOULD be a cryptographic quality
+-	 *	      random number with a sufficient length.
+-	 *	      Discussion in [RFC1750] can be helpful in
+-	 *	      selection of the key.
+-	 */
+-	__u8 secret_key[SCTP_SECRET_SIZE];
+-
+- 	/* digest:  This is a digest of the sctp cookie.  This field is
+- 	 * 	    only used on the receive path when we try to validate
+- 	 * 	    that the cookie has not been tampered with.  We put
+- 	 * 	    this here so we pre-allocate this once and can re-use
+- 	 * 	    on every receive.
+- 	 */
+- 	__u8 *digest;
+- 
++	/* Cookie authentication key used by this endpoint */
++	struct hmac_sha256_key cookie_auth_key;
++
+ 	/* sendbuf acct. policy.	*/
+ 	__u32 sndbuf_policy;
+ 
+ 	/* rcvbuf acct. policy.	*/
+ 	__u32 rcvbuf_policy;
+-
+-	/* SCTP AUTH: array of the HMACs that will be allocated
+-	 * we need this per association so that we don't serialize
+-	 */
+-	struct crypto_shash **auth_hmacs;
+ 
+ 	/* SCTP-AUTH: hmacs for the endpoint encoded into parameter */
+ 	 struct sctp_hmac_algo_param *auth_hmacs_list;
+--- a/net/sctp/Kconfig
++++ b/net/sctp/Kconfig
+@@ -7,9 +7,9 @@
+ 	tristate "The SCTP Protocol"
+ 	depends on INET
+ 	depends on IPV6 || IPV6=n
+-	select CRYPTO
+-	select CRYPTO_HMAC
+-	select CRYPTO_SHA1
++	select CRYPTO_LIB_SHA1
++	select CRYPTO_LIB_SHA256
++	select CRYPTO_LIB_UTILS
+ 	select NET_CRC32C
+ 	select NET_UDP_TUNNEL
+ 	help
+@@ -49,45 +49,24 @@
+ 	  'cat /proc/net/sctp/sctp_dbg_objcnt'
+ 
+ 	  If unsure, say N
++
+ choice
+-	prompt "Default SCTP cookie HMAC encoding"
+-	default SCTP_DEFAULT_COOKIE_HMAC_MD5
++	prompt "Default SCTP cookie authentication method"
++	default SCTP_DEFAULT_COOKIE_HMAC_SHA256
+ 	help
+-	  This option sets the default sctp cookie hmac algorithm
+-	  when in doubt select 'md5'
++	  This option sets the default SCTP cookie authentication method, for
++	  when a method hasn't been explicitly selected via the
++	  net.sctp.cookie_hmac_alg sysctl.
+ 
+-config SCTP_DEFAULT_COOKIE_HMAC_MD5
+-	bool "Enable optional MD5 hmac cookie generation"
+-	help
+-	  Enable optional MD5 hmac based SCTP cookie generation
+-	select SCTP_COOKIE_HMAC_MD5
++	  If unsure, choose the default (HMAC-SHA256).
+ 
+-config SCTP_DEFAULT_COOKIE_HMAC_SHA1
+-	bool "Enable optional SHA1 hmac cookie generation"
+-	help
+-	  Enable optional SHA1 hmac based SCTP cookie generation
+-	select SCTP_COOKIE_HMAC_SHA1
++config SCTP_DEFAULT_COOKIE_HMAC_SHA256
++	bool "HMAC-SHA256"
+ 
+ config SCTP_DEFAULT_COOKIE_HMAC_NONE
+-	bool "Use no hmac alg in SCTP cookie generation"
+-	help
+-	  Use no hmac algorithm in SCTP cookie generation
++	bool "None"
+ 
+ endchoice
+-
+-config SCTP_COOKIE_HMAC_MD5
+-	bool "Enable optional MD5 hmac cookie generation"
+-	help
+-	  Enable optional MD5 hmac based SCTP cookie generation
+-	select CRYPTO_HMAC if SCTP_COOKIE_HMAC_MD5
+-	select CRYPTO_MD5 if SCTP_COOKIE_HMAC_MD5
+-
+-config SCTP_COOKIE_HMAC_SHA1
+-	bool "Enable optional SHA1 hmac cookie generation"
+-	help
+-	  Enable optional SHA1 hmac based SCTP cookie generation
+-	select CRYPTO_HMAC if SCTP_COOKIE_HMAC_SHA1
+-	select CRYPTO_SHA1 if SCTP_COOKIE_HMAC_SHA1
+ 
+ config INET_SCTP_DIAG
+ 	depends on INET_DIAG
+--- a/net/sctp/auth.c
++++ b/net/sctp/auth.c
+@@ -12,36 +12,37 @@
+  *   Vlad Yasevich     <vladislav.yasevich@hp.com>
+  */
+ 
+-#include <crypto/hash.h>
++#include <crypto/sha1.h>
++#include <crypto/sha2.h>
+ #include <linux/slab.h>
+ #include <linux/types.h>
+-#include <linux/scatterlist.h>
+ #include <net/sctp/sctp.h>
+ #include <net/sctp/auth.h>
+ 
+-static struct sctp_hmac sctp_hmac_list[SCTP_AUTH_NUM_HMACS] = {
++static const struct sctp_hmac sctp_hmac_list[SCTP_AUTH_NUM_HMACS] = {
+ 	{
+ 		/* id 0 is reserved.  as all 0 */
+ 		.hmac_id = SCTP_AUTH_HMAC_ID_RESERVED_0,
+ 	},
+ 	{
+ 		.hmac_id = SCTP_AUTH_HMAC_ID_SHA1,
+-		.hmac_name = "hmac(sha1)",
+-		.hmac_len = SCTP_SHA1_SIG_SIZE,
++		.hmac_len = SHA1_DIGEST_SIZE,
+ 	},
+ 	{
+ 		/* id 2 is reserved as well */
+ 		.hmac_id = SCTP_AUTH_HMAC_ID_RESERVED_2,
+ 	},
+-#if IS_ENABLED(CONFIG_CRYPTO_SHA256)
+ 	{
+ 		.hmac_id = SCTP_AUTH_HMAC_ID_SHA256,
+-		.hmac_name = "hmac(sha256)",
+-		.hmac_len = SCTP_SHA256_SIG_SIZE,
+-	}
+-#endif
++		.hmac_len = SHA256_DIGEST_SIZE,
++	}
+ };
+ 
++static bool sctp_hmac_supported(__u16 hmac_id)
++{
++	return hmac_id < ARRAY_SIZE(sctp_hmac_list) &&
++	       sctp_hmac_list[hmac_id].hmac_len != 0;
++}
+ 
+ void sctp_auth_key_put(struct sctp_auth_bytes *key)
+ {
+@@ -444,76 +445,7 @@
+ 	return NULL;
+ }
+ 
+-/*
+- * Initialize all the possible digest transforms that we can use.  Right
+- * now, the supported digests are SHA1 and SHA256.  We do this here once
+- * because of the restrictiong that transforms may only be allocated in
+- * user context.  This forces us to pre-allocated all possible transforms
+- * at the endpoint init time.
+- */
+-int sctp_auth_init_hmacs(struct sctp_endpoint *ep, gfp_t gfp)
+-{
+-	struct crypto_shash *tfm = NULL;
+-	__u16   id;
+-
+-	/* If the transforms are already allocated, we are done */
+-	if (ep->auth_hmacs)
+-		return 0;
+-
+-	/* Allocated the array of pointers to transorms */
+-	ep->auth_hmacs = kcalloc(SCTP_AUTH_NUM_HMACS,
+-				 sizeof(struct crypto_shash *),
+-				 gfp);
+-	if (!ep->auth_hmacs)
+-		return -ENOMEM;
+-
+-	for (id = 0; id < SCTP_AUTH_NUM_HMACS; id++) {
+-
+-		/* See is we support the id.  Supported IDs have name and
+-		 * length fields set, so that we can allocated and use
+-		 * them.  We can safely just check for name, for without the
+-		 * name, we can't allocate the TFM.
+-		 */
+-		if (!sctp_hmac_list[id].hmac_name)
+-			continue;
+-
+-		/* If this TFM has been allocated, we are all set */
+-		if (ep->auth_hmacs[id])
+-			continue;
+-
+-		/* Allocate the ID */
+-		tfm = crypto_alloc_shash(sctp_hmac_list[id].hmac_name, 0, 0);
+-		if (IS_ERR(tfm))
+-			goto out_err;
+-
+-		ep->auth_hmacs[id] = tfm;
+-	}
+-
+-	return 0;
+-
+-out_err:
+-	/* Clean up any successful allocations */
+-	sctp_auth_destroy_hmacs(ep->auth_hmacs);
+-	ep->auth_hmacs = NULL;
+-	return -ENOMEM;
+-}
+-
+-/* Destroy the hmac tfm array */
+-void sctp_auth_destroy_hmacs(struct crypto_shash *auth_hmacs[])
+-{
+-	int i;
+-
+-	if (!auth_hmacs)
+-		return;
+-
+-	for (i = 0; i < SCTP_AUTH_NUM_HMACS; i++) {
+-		crypto_free_shash(auth_hmacs[i]);
+-	}
+-	kfree(auth_hmacs);
+-}
+-
+-
+-struct sctp_hmac *sctp_auth_get_hmac(__u16 hmac_id)
++const struct sctp_hmac *sctp_auth_get_hmac(__u16 hmac_id)
+ {
+ 	return &sctp_hmac_list[hmac_id];
+ }
+@@ -521,7 +453,8 @@
+ /* Get an hmac description information that we can use to build
+  * the AUTH chunk
+  */
+-struct sctp_hmac *sctp_auth_asoc_get_hmac(const struct sctp_association *asoc)
++const struct sctp_hmac *
++sctp_auth_asoc_get_hmac(const struct sctp_association *asoc)
+ {
+ 	struct sctp_hmac_algo_param *hmacs;
+ 	__u16 n_elt;
+@@ -543,26 +476,10 @@
+ 		 sizeof(struct sctp_paramhdr)) >> 1;
+ 	for (i = 0; i < n_elt; i++) {
+ 		id = ntohs(hmacs->hmac_ids[i]);
+-
+-		/* Check the id is in the supported range. And
+-		 * see if we support the id.  Supported IDs have name and
+-		 * length fields set, so that we can allocate and use
+-		 * them.  We can safely just check for name, for without the
+-		 * name, we can't allocate the TFM.
+-		 */
+-		if (id > SCTP_AUTH_HMAC_ID_MAX ||
+-		    !sctp_hmac_list[id].hmac_name) {
+-			id = 0;
+-			continue;
+-		}
+-
+-		break;
+-	}
+-
+-	if (id == 0)
+-		return NULL;
+-
+-	return &sctp_hmac_list[id];
++		if (sctp_hmac_supported(id))
++			return &sctp_hmac_list[id];
++	}
++	return NULL;
+ }
+ 
+ static int __sctp_auth_find_hmacid(__be16 *hmacs, int n_elts, __be16 hmac_id)
+@@ -606,7 +523,6 @@
+ void sctp_auth_asoc_set_default_hmac(struct sctp_association *asoc,
+ 				     struct sctp_hmac_algo_param *hmacs)
+ {
+-	struct sctp_endpoint *ep;
+ 	__u16   id;
+ 	int	i;
+ 	int	n_params;
+@@ -617,16 +533,9 @@
+ 
+ 	n_params = (ntohs(hmacs->param_hdr.length) -
+ 		    sizeof(struct sctp_paramhdr)) >> 1;
+-	ep = asoc->ep;
+ 	for (i = 0; i < n_params; i++) {
+ 		id = ntohs(hmacs->hmac_ids[i]);
+-
+-		/* Check the id is in the supported range */
+-		if (id > SCTP_AUTH_HMAC_ID_MAX)
+-			continue;
+-
+-		/* If this TFM has been allocated, use this id */
+-		if (ep->auth_hmacs[id]) {
++		if (sctp_hmac_supported(id)) {
+ 			asoc->default_hmac_id = id;
+ 			break;
+ 		}
+@@ -709,10 +618,9 @@
+ 			      struct sctp_shared_key *ep_key, gfp_t gfp)
+ {
+ 	struct sctp_auth_bytes *asoc_key;
+-	struct crypto_shash *tfm;
+ 	__u16 key_id, hmac_id;
+-	unsigned char *end;
+ 	int free_key = 0;
++	size_t data_len;
+ 	__u8 *digest;
+ 
+ 	/* Extract the info we need:
+@@ -733,19 +641,17 @@
+ 		free_key = 1;
+ 	}
+ 
+-	/* set up scatter list */
+-	end = skb_tail_pointer(skb);
+-
+-	tfm = asoc->ep->auth_hmacs[hmac_id];
+-
++	data_len = skb_tail_pointer(skb) - (unsigned char *)auth;
+ 	digest = (u8 *)(&auth->auth_hdr + 1);
+-	if (crypto_shash_setkey(tfm, &asoc_key->data[0], asoc_key->len))
+-		goto free;
+-
+-	crypto_shash_tfm_digest(tfm, (u8 *)auth, end - (unsigned char *)auth,
+-				digest);
+-
+-free:
++	if (hmac_id == SCTP_AUTH_HMAC_ID_SHA1) {
++		hmac_sha1_usingrawkey(asoc_key->data, asoc_key->len,
++				      (const u8 *)auth, data_len, digest);
++	} else {
++		WARN_ON_ONCE(hmac_id != SCTP_AUTH_HMAC_ID_SHA256);
++		hmac_sha256_usingrawkey(asoc_key->data, asoc_key->len,
++					(const u8 *)auth, data_len, digest);
++	}
++
+ 	if (free_key)
+ 		sctp_auth_key_put(asoc_key);
+ }
+@@ -788,14 +694,11 @@
+ 	for (i = 0; i < hmacs->shmac_num_idents; i++) {
+ 		id = hmacs->shmac_idents[i];
+ 
+-		if (id > SCTP_AUTH_HMAC_ID_MAX)
++		if (!sctp_hmac_supported(id))
+ 			return -EOPNOTSUPP;
+ 
+ 		if (SCTP_AUTH_HMAC_ID_SHA1 == id)
+ 			has_sha1 = 1;
+-
+-		if (!sctp_hmac_list[id].hmac_name)
+-			return -EOPNOTSUPP;
+ 	}
+ 
+ 	if (!has_sha1)
+@@ -1021,8 +924,6 @@
+ 
+ int sctp_auth_init(struct sctp_endpoint *ep, gfp_t gfp)
+ {
+-	int err = -ENOMEM;
+-
+ 	/* Allocate space for HMACS and CHUNKS authentication
+ 	 * variables.  There are arrays that we encode directly
+ 	 * into parameters to make the rest of the operations easier.
+@@ -1060,13 +961,6 @@
+ 		ep->auth_chunk_list = auth_chunks;
+ 	}
+ 
+-	/* Allocate and initialize transorms arrays for supported
+-	 * HMACs.
+-	 */
+-	err = sctp_auth_init_hmacs(ep, gfp);
+-	if (err)
+-		goto nomem;
+-
+ 	return 0;
+ 
+ nomem:
+@@ -1075,7 +969,7 @@
+ 	kfree(ep->auth_chunk_list);
+ 	ep->auth_hmacs_list = NULL;
+ 	ep->auth_chunk_list = NULL;
+-	return err;
++	return -ENOMEM;
+ }
+ 
+ void sctp_auth_free(struct sctp_endpoint *ep)
+@@ -1084,6 +978,4 @@
+ 	kfree(ep->auth_chunk_list);
+ 	ep->auth_hmacs_list = NULL;
+ 	ep->auth_chunk_list = NULL;
+-	sctp_auth_destroy_hmacs(ep->auth_hmacs);
+-	ep->auth_hmacs = NULL;
+-}
++}
+--- a/net/sctp/chunk.c
++++ b/net/sctp/chunk.c
+@@ -184,7 +184,8 @@
+ 	 * DATA.
+ 	 */
+ 	if (sctp_auth_send_cid(SCTP_CID_DATA, asoc)) {
+-		struct sctp_hmac *hmac_desc = sctp_auth_asoc_get_hmac(asoc);
++		const struct sctp_hmac *hmac_desc =
++			sctp_auth_asoc_get_hmac(asoc);
+ 
+ 		if (hmac_desc)
+ 			max_data -= SCTP_PAD4(sizeof(struct sctp_auth_chunk) +
+--- a/net/sctp/endpointola.c
++++ b/net/sctp/endpointola.c
+@@ -35,6 +35,15 @@
+ /* Forward declarations for internal helpers. */
+ static void sctp_endpoint_bh_rcv(struct work_struct *work);
+ 
++static void gen_cookie_auth_key(struct hmac_sha256_key *key)
++{
++	u8 raw_key[SCTP_COOKIE_KEY_SIZE];
++
++	get_random_bytes(raw_key, sizeof(raw_key));
++	hmac_sha256_preparekey(key, raw_key, sizeof(raw_key));
++	memzero_explicit(raw_key, sizeof(raw_key));
++}
++
+ /*
+  * Initialize the base fields of the endpoint structure.
+  */
+@@ -44,10 +53,6 @@
+ {
+ 	struct net *net = sock_net(sk);
+ 	struct sctp_shared_key *null_key;
+-
+-	ep->digest = kzalloc(SCTP_SIGNATURE_SIZE, gfp);
+-	if (!ep->digest)
+-		return NULL;
+ 
+ 	ep->asconf_enable = net->sctp.addip_enable;
+ 	ep->auth_enable = net->sctp.auth_enable;
+@@ -90,8 +95,8 @@
+ 	/* Get the receive buffer policy for this endpoint */
+ 	ep->rcvbuf_policy = net->sctp.rcvbuf_policy;
+ 
+-	/* Initialize the secret key used with cookie. */
+-	get_random_bytes(ep->secret_key, sizeof(ep->secret_key));
++	/* Generate the cookie authentication key. */
++	gen_cookie_auth_key(&ep->cookie_auth_key);
+ 
+ 	/* SCTP-AUTH extensions*/
+ 	INIT_LIST_HEAD(&ep->endpoint_shared_keys);
+@@ -118,7 +123,6 @@
+ nomem_shkey:
+ 	sctp_auth_free(ep);
+ nomem:
+-	kfree(ep->digest);
+ 	return NULL;
+ 
+ }
+@@ -205,9 +209,6 @@
+ 		return;
+ 	}
+ 
+-	/* Free the digest buffer */
+-	kfree(ep->digest);
+-
+ 	/* SCTP-AUTH: Free up AUTH releated data such as shared keys
+ 	 * chunks and hmacs arrays that were allocated
+ 	 */
+@@ -218,7 +219,7 @@
+ 	sctp_inq_free(&ep->base.inqueue);
+ 	sctp_bind_addr_free(&ep->base.bind_addr);
+ 
+-	memset(ep->secret_key, 0, sizeof(ep->secret_key));
++	memzero_explicit(&ep->cookie_auth_key, sizeof(ep->cookie_auth_key));
+ 
+ 	sk = ep->base.sk;
+ 	/* Remove and free the port */
+--- a/net/sctp/protocol.c
++++ b/net/sctp/protocol.c
+@@ -1334,14 +1334,9 @@
+ 	/* Whether Cookie Preservative is enabled(1) or not(0) */
+ 	net->sctp.cookie_preserve_enable 	= 1;
+ 
+-	/* Default sctp sockets to use md5 as their hmac alg */
+-#if defined (CONFIG_SCTP_DEFAULT_COOKIE_HMAC_MD5)
+-	net->sctp.sctp_hmac_alg			= "md5";
+-#elif defined (CONFIG_SCTP_DEFAULT_COOKIE_HMAC_SHA1)
+-	net->sctp.sctp_hmac_alg			= "sha1";
+-#else
+-	net->sctp.sctp_hmac_alg			= NULL;
+-#endif
++	/* Whether cookie authentication is enabled(1) or not(0) */
++	net->sctp.cookie_auth_enable =
++		!IS_ENABLED(CONFIG_SCTP_DEFAULT_COOKIE_HMAC_NONE);
+ 
+ 	/* Max.Burst		    - 4 */
+ 	net->sctp.max_burst			= SCTP_DEFAULT_MAX_BURST;
+--- a/net/sctp/sm_make_chunk.c
++++ b/net/sctp/sm_make_chunk.c
+@@ -30,7 +30,6 @@
+ 
+ #define pr_fmt(fmt) KBUILD_MODNAME ": " fmt
+ 
+-#include <crypto/hash.h>
+ #include <crypto/utils.h>
+ #include <linux/types.h>
+ #include <linux/kernel.h>
+@@ -1320,7 +1319,7 @@
+ 				  __u16 key_id)
+ {
+ 	struct sctp_authhdr auth_hdr;
+-	struct sctp_hmac *hmac_desc;
++	const struct sctp_hmac *hmac_desc;
+ 	struct sctp_chunk *retval;
+ 
+ 	/* Get the first hmac that the peer told us to use */
+@@ -1675,8 +1674,10 @@
+ 	 * out on the network.
+ 	 */
+ 	retval = kzalloc(*cookie_len, GFP_ATOMIC);
+-	if (!retval)
+-		goto nodata;
++	if (!retval) {
++		*cookie_len = 0;
++		return NULL;
++	}
+ 
+ 	cookie = (struct sctp_signed_cookie *) retval->body;
+ 
+@@ -1707,26 +1708,14 @@
+ 	memcpy((__u8 *)(cookie + 1) +
+ 	       ntohs(init_chunk->chunk_hdr->length), raw_addrs, addrs_len);
+ 
+-	if (sctp_sk(ep->base.sk)->hmac) {
+-		struct crypto_shash *tfm = sctp_sk(ep->base.sk)->hmac;
+-		int err;
+-
+-		/* Sign the message.  */
+-		err = crypto_shash_setkey(tfm, ep->secret_key,
+-					  sizeof(ep->secret_key)) ?:
+-		      crypto_shash_tfm_digest(tfm, (u8 *)&cookie->c, bodysize,
+-					      cookie->signature);
+-		if (err)
+-			goto free_cookie;
+-	}
+-
+-	return retval;
+-
+-free_cookie:
+-	kfree(retval);
+-nodata:
+-	*cookie_len = 0;
+-	return NULL;
++	/* Sign the cookie, if cookie authentication is enabled. */
++	if (sctp_sk(ep->base.sk)->cookie_auth_enable) {
++		static_assert(sizeof(cookie->mac) == SHA256_DIGEST_SIZE);
++		hmac_sha256(&ep->cookie_auth_key, (const u8 *)&cookie->c,
++			    bodysize, cookie->mac);
++	}
++
++	return retval;
+ }
+ 
+ /* Unpack the cookie from COOKIE ECHO chunk, recreating the association.  */
+@@ -1741,7 +1730,6 @@
+ 	struct sctp_signed_cookie *cookie;
+ 	struct sk_buff *skb = chunk->skb;
+ 	struct sctp_cookie *bear_cookie;
+-	__u8 *digest = ep->digest;
+ 	enum sctp_scope scope;
+ 	unsigned int len;
+ 	ktime_t kt;
+@@ -1771,30 +1759,19 @@
+ 	cookie = chunk->subh.cookie_hdr;
+ 	bear_cookie = &cookie->c;
+ 
+-	if (!sctp_sk(ep->base.sk)->hmac)
+-		goto no_hmac;
+-
+-	/* Check the signature.  */
+-	{
+-		struct crypto_shash *tfm = sctp_sk(ep->base.sk)->hmac;
+-		int err;
+-
+-		err = crypto_shash_setkey(tfm, ep->secret_key,
+-					  sizeof(ep->secret_key)) ?:
+-		      crypto_shash_tfm_digest(tfm, (u8 *)bear_cookie, bodysize,
+-					      digest);
+-		if (err) {
+-			*error = -SCTP_IERROR_NOMEM;
++	/* Verify the cookie's MAC, if cookie authentication is enabled. */
++	if (sctp_sk(ep->base.sk)->cookie_auth_enable) {
++		u8 mac[SHA256_DIGEST_SIZE];
++
++		hmac_sha256(&ep->cookie_auth_key, (const u8 *)bear_cookie,
++			    bodysize, mac);
++		static_assert(sizeof(cookie->mac) == sizeof(mac));
++		if (crypto_memneq(mac, cookie->mac, sizeof(mac))) {
++			*error = -SCTP_IERROR_BAD_SIG;
+ 			goto fail;
+ 		}
+ 	}
+ 
+-	if (crypto_memneq(digest, cookie->signature, SCTP_SIGNATURE_SIZE)) {
+-		*error = -SCTP_IERROR_BAD_SIG;
+-		goto fail;
+-	}
+-
+-no_hmac:
+ 	/* IG Section 2.35.2:
+ 	 *  3) Compare the port numbers and the verification tag contained
+ 	 *     within the COOKIE ECHO chunk to the actual port numbers and the
+--- a/net/sctp/sm_statefuns.c
++++ b/net/sctp/sm_statefuns.c
+@@ -4363,7 +4363,7 @@
+ 	struct sctp_shared_key *sh_key = NULL;
+ 	struct sctp_authhdr *auth_hdr;
+ 	__u8 *save_digest, *digest;
+-	struct sctp_hmac *hmac;
++	const struct sctp_hmac *hmac;
+ 	unsigned int sig_len;
+ 	__u16 key_id;
+ 
+--- a/net/sctp/socket.c
++++ b/net/sctp/socket.c
+@@ -37,7 +37,6 @@
+ 
+ #define pr_fmt(fmt) KBUILD_MODNAME ": " fmt
+ 
+-#include <crypto/hash.h>
+ #include <linux/types.h>
+ #include <linux/kernel.h>
+ #include <linux/wait.h>
+@@ -4985,7 +4984,7 @@
+ 	sp->default_rcv_context = 0;
+ 	sp->max_burst = net->sctp.max_burst;
+ 
+-	sp->sctp_hmac_alg = net->sctp.sctp_hmac_alg;
++	sp->cookie_auth_enable = net->sctp.cookie_auth_enable;
+ 
+ 	/* Initialize default setup parameters. These parameters
+ 	 * can be modified with the SCTP_INITMSG socket option or
+@@ -5077,8 +5076,6 @@
+ 	if (!sp->ep)
+ 		return -ENOMEM;
+ 
+-	sp->hmac = NULL;
+-
+ 	sk->sk_destruct = sctp_destruct_sock;
+ 
+ 	SCTP_DBG_OBJCNT_INC(sock);
+@@ -5118,18 +5115,8 @@
+ 	SCTP_DBG_OBJCNT_DEC(sock);
+ }
+ 
+-/* Triggered when there are no references on the socket anymore */
+-static void sctp_destruct_common(struct sock *sk)
+-{
+-	struct sctp_sock *sp = sctp_sk(sk);
+-
+-	/* Free up the HMAC transform. */
+-	crypto_free_shash(sp->hmac);
+-}
+-
+ static void sctp_destruct_sock(struct sock *sk)
+ {
+-	sctp_destruct_common(sk);
+ 	inet_sock_destruct(sk);
+ }
+ 
+@@ -8531,21 +8518,7 @@
+ {
+ 	struct sctp_sock *sp = sctp_sk(sk);
+ 	struct sctp_endpoint *ep = sp->ep;
+-	struct crypto_shash *tfm = NULL;
+-	char alg[32];
+ 	int err;
+-
+-	/* Allocate HMAC for generating cookie. */
+-	if (!sp->hmac && sp->sctp_hmac_alg) {
+-		sprintf(alg, "hmac(%s)", sp->sctp_hmac_alg);
+-		tfm = crypto_alloc_shash(alg, 0, 0);
+-		if (IS_ERR(tfm)) {
+-			net_info_ratelimited("failed to load transform for %s: %ld\n",
+-					     sp->sctp_hmac_alg, PTR_ERR(tfm));
+-			return -ENOSYS;
+-		}
+-		sctp_sk(sk)->hmac = tfm;
+-	}
+ 
+ 	/*
+ 	 * If a bind() or sctp_bindx() is not called prior to a listen()
+@@ -9562,7 +9535,6 @@
+ 	 * copy.
+ 	 */
+ 	newsp->ep = newep;
+-	newsp->hmac = NULL;
+ 
+ 	/* Hook this new socket in to the bind_hash list. */
+ 	head = &sctp_port_hashtable[sctp_phashfn(sock_net(oldsk),
+@@ -9581,16 +9553,6 @@
+ 				 &oldsp->ep->base.bind_addr, GFP_KERNEL);
+ 	if (err)
+ 		return err;
+-
+-	/* New ep's auth_hmacs should be set if old ep's is set, in case
+-	 * that net->sctp.auth_enable has been changed to 0 by users and
+-	 * new ep's auth_hmacs couldn't be set in sctp_endpoint_init().
+-	 */
+-	if (oldsp->ep->auth_hmacs) {
+-		err = sctp_auth_init_hmacs(newsp->ep, GFP_KERNEL);
+-		if (err)
+-			return err;
+-	}
+ 
+ 	sctp_auto_asconf_init(newsp);
+ 
+@@ -9724,7 +9686,6 @@
+ 
+ static void sctp_v6_destruct_sock(struct sock *sk)
+ {
+-	sctp_destruct_common(sk);
+ 	inet6_sock_destruct(sk);
+ }
+ 
+--- a/net/sctp/sysctl.c
++++ b/net/sctp/sysctl.c
+@@ -174,7 +174,7 @@
+ 	},
+ 	{
+ 		.procname	= "cookie_hmac_alg",
+-		.data		= &init_net.sctp.sctp_hmac_alg,
++		.data		= &init_net.sctp.cookie_auth_enable,
+ 		.maxlen		= 8,
+ 		.mode		= 0644,
+ 		.proc_handler	= proc_sctp_do_hmac_alg,
+@@ -388,10 +388,8 @@
+ 				 void *buffer, size_t *lenp, loff_t *ppos)
+ {
+ 	struct net *net = container_of(ctl->data, struct net,
+-				       sctp.sctp_hmac_alg);
++				       sctp.cookie_auth_enable);
+ 	struct ctl_table tbl;
+-	bool changed = false;
+-	char *none = "none";
+ 	char tmp[8] = {0};
+ 	int ret;
+ 
+@@ -399,35 +397,28 @@
+ 
+ 	if (write) {
+ 		tbl.data = tmp;
+-		tbl.maxlen = sizeof(tmp);
+-	} else {
+-		tbl.data = net->sctp.sctp_hmac_alg ? : none;
+-		tbl.maxlen = strlen(tbl.data);
++		tbl.maxlen = sizeof(tmp) - 1;
++		ret = proc_dostring(&tbl, 1, buffer, lenp, ppos);
++		if (ret)
++			return ret;
++		if (!strcmp(tmp, "sha256") ||
++		    /* for backwards compatibility */
++		    !strcmp(tmp, "md5") || !strcmp(tmp, "sha1")) {
++			net->sctp.cookie_auth_enable = 1;
++			return 0;
++		}
++		if (!strcmp(tmp, "none")) {
++			net->sctp.cookie_auth_enable = 0;
++			return 0;
++		}
++		return -EINVAL;
+ 	}
+-
+-	ret = proc_dostring(&tbl, write, buffer, lenp, ppos);
+-	if (write && ret == 0) {
+-#ifdef CONFIG_CRYPTO_MD5
+-		if (!strncmp(tmp, "md5", 3)) {
+-			net->sctp.sctp_hmac_alg = "md5";
+-			changed = true;
+-		}
+-#endif
+-#ifdef CONFIG_CRYPTO_SHA1
+-		if (!strncmp(tmp, "sha1", 4)) {
+-			net->sctp.sctp_hmac_alg = "sha1";
+-			changed = true;
+-		}
+-#endif
+-		if (!strncmp(tmp, "none", 4)) {
+-			net->sctp.sctp_hmac_alg = NULL;
+-			changed = true;
+-		}
+-		if (!changed)
+-			ret = -EINVAL;
+-	}
+-
+-	return ret;
++	if (net->sctp.cookie_auth_enable)
++		tbl.data = (char *)"sha256";
++	else
++		tbl.data = (char *)"none";
++	tbl.maxlen = strlen(tbl.data);
++	return proc_dostring(&tbl, 0, buffer, lenp, ppos);
+ }
+ 
+ static int proc_sctp_do_rto_min(const struct ctl_table *ctl, int write,
