@@ -7,4 +7,4 @@ metadata:
     NVIDIA 580.178.04 proprietary kernel modules and GPUDirect Storage 2.29.4 for Linux 6.17.13-talos-dgx1022.
   compatibility:
     talos:
-      version: ">= v1.14.1"
+      version: ">= v1.5.0"
