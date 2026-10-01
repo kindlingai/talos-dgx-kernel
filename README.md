@@ -33,6 +33,7 @@ fingerprint, and identical files give the same one on every machine.
 | `installer-arm64.tar` | Installer image. Push it, then reference it from `machine.install.image` or `talosctl upgrade --image`. |
 | `metal-arm64.iso`     | Bootable installation ISO.                                             |
 | `SHA256SUMS`          | Checksums of the installer and the ISO.                                |
+| `OCI-DIGESTS`         | Manifest digests of the images below; identical for identical inputs.  |
 | `oci/kernel`          | Kernel image in the Talos `PKG_KERNEL` layout (OCI layout).            |
 | `oci/nvidia-extension`| NVIDIA system extension image (OCI layout).                            |
 | `oci/installer-base`  | Talos installer base built for this kernel (OCI layout).               |
@@ -108,7 +109,7 @@ release; `SIGNING_KEY=/path/to/key.pem` selects a key stored elsewhere.
 ## Build
 
 ```sh
-make            # kernel, extension, Talos images, installer, ISO, SHA256SUMS
+make            # kernel, extension, Talos images, installer, ISO, SHA256SUMS, OCI-DIGESTS
 ```
 
 Individual steps: `make kernel`, `make talos`, `make installer`, `make iso`. BuildKit
@@ -117,8 +118,9 @@ caches every stage, so repeated runs rebuild only what changed. `make clean` rem
 
 ### Reproducibility
 
-The same inputs and signing key produce the same `SHA256SUMS`. Inputs are pinned as
-follows:
+The same inputs and signing key produce the same kernel, NVIDIA extension, and
+`installer-base` images. `make` writes their manifest digests to `_out/OCI-DIGESTS`.
+Inputs are pinned as follows:
 
 - Source archives by SHA-256 (`Dockerfile`), Talos by commit (`Makefile`).
 - Every container image by digest: toolchain and validator (`Dockerfile`), Talos
@@ -128,8 +130,14 @@ follows:
   (`rewrite-timestamp=true` on every image output). Kbuild user and host are fixed in
   the toolchain stage, and the Kbuild version is the input fingerprint.
 
+The Talos imager records the time it runs in two places: the installer image's
+creation time, and the file times of the system extensions archive it appends to the
+initramfs. Installers and ISOs from separate runs carry those timestamps and otherwise
+hold the same content, so `SHA256SUMS` identifies one run's files and `OCI-DIGESTS`
+identifies the build.
+
 To check a build, run `make` again on another machine or a fresh builder
-(`docker buildx prune --builder talos-dgx-kernel -af`) and compare `_out/SHA256SUMS`.
+(`docker buildx prune --builder talos-dgx-kernel -af`) and compare `_out/OCI-DIGESTS`.
 
 ## Release
 
@@ -143,8 +151,8 @@ To check a build, run `make` again on another machine or a fresh builder
    ```
 
 `make release` creates the GitHub release for the tag with `installer-arm64.tar`,
-`metal-arm64.iso`, and `SHA256SUMS`. The release notes list the kernel release, its
-`uname -v` fingerprint, and the checksums.
+`metal-arm64.iso`, `SHA256SUMS`, and `OCI-DIGESTS`. The release notes list the kernel
+release, its `uname -v` fingerprint, the checksums, and the image digests.
 
 Publishing the release runs `.github/workflows/publish.yaml`. It checks
 `installer-arm64.tar` against `SHA256SUMS`, pushes it to
@@ -167,7 +175,7 @@ and disk listed under [Requirements](#requirements); GitHub's standard runners f
 private repositories are smaller.
 
 For a tag without a release, the job runs `make release`, then `publish.yaml`. For a tag
-whose release already exists, the job compares its `SHA256SUMS` with the release's,
+whose release already exists, the job compares its `OCI-DIGESTS` with the release's,
 which checks that the release reproduces on that runner.
 
 Repository setup:

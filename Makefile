@@ -30,15 +30,21 @@ IMAGER    := talos-dgx-kernel/imager:$(TALOS_VERSION)
 
 export TALOS_VERSION TALOS_COMMIT KERNEL_RELEASE KBUILD_BUILD_VERSION SOURCE_DATE_EPOCH SIGNING_KEY OUT TALOS_SRC
 
-BAKE   := docker buildx bake --builder $(BUILDER) --progress $(PROGRESS)
+# The signing key may live outside the checkout (CI writes it to RUNNER_TEMP).
+BAKE   := docker buildx bake --builder $(BUILDER) --progress $(PROGRESS) --allow fs.read=$(SIGNING_KEY)
 IMAGER_RUN := docker run --rm -i --env SOURCE_DATE_EPOCH \
 	--volume $(OUT)/oci:/oci:ro --volume $(OUT):/out $(IMAGER) - --output /out
 
 .PHONY: all builder signing-key kernel talos-source talos installer iso push release clean
 
+# SHA256SUMS covers the boot artifacts. OCI-DIGESTS lists the manifest digests of
+# the images the imager assembles them from; those reproduce exactly.
 all: installer iso
 	cd $(OUT) && shasum -a 256 installer-arm64.tar metal-arm64.iso > SHA256SUMS
-	cat $(OUT)/SHA256SUMS
+	cd $(OUT)/oci && for image in *; do \
+		echo "$$(sed -E 's/.*"digest":"(sha256:[0-9a-f]{64})".*/\1/' $$image/index.json)  $$image"; \
+	done > $(OUT)/OCI-DIGESTS
+	cat $(OUT)/SHA256SUMS $(OUT)/OCI-DIGESTS
 
 builder:
 	docker buildx inspect $(BUILDER) >/dev/null 2>&1 || \
@@ -85,9 +91,9 @@ push:
 # which pushes the installer image to GHCR.
 release:
 	{ echo "Linux \`$(KERNEL_RELEASE)\` (\`uname -v\`: \`#$(KBUILD_BUILD_VERSION)\`), Talos $(TALOS_VERSION)."; \
-	  echo; echo '```'; cat $(OUT)/SHA256SUMS; echo '```'; } > $(OUT)/release.md
+	  echo; echo '```'; cat $(OUT)/SHA256SUMS $(OUT)/OCI-DIGESTS; echo '```'; } > $(OUT)/release.md
 	gh release create $(TAG) --verify-tag --title $(TAG) --notes-file $(OUT)/release.md \
-		$(OUT)/installer-arm64.tar $(OUT)/metal-arm64.iso $(OUT)/SHA256SUMS
+		$(OUT)/installer-arm64.tar $(OUT)/metal-arm64.iso $(OUT)/SHA256SUMS $(OUT)/OCI-DIGESTS
 
 clean:
 	rm -rf $(OUT) $(CURDIR)/.work

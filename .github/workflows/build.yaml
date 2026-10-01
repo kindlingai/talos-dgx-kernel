@@ -6,7 +6,7 @@ name: build
 #
 # On a version tag (v*), the job publishes the release with `make release` and
 # publish.yaml pushes the installer image. When the release already exists, the
-# job instead checks that this build reproduces its SHA256SUMS.
+# job instead checks that this build reproduces its OCI-DIGESTS.
 on:
   push:
     tags: ["v*"]
@@ -50,6 +50,7 @@ jobs:
             _out/installer-arm64.tar
             _out/metal-arm64.iso
             _out/SHA256SUMS
+            _out/OCI-DIGESTS
 
       - name: Publish release
         if: github.ref_type == 'tag'
@@ -57,7 +58,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           if gh release view "${GITHUB_REF_NAME}" >/dev/null 2>&1; then
-            gh release download "${GITHUB_REF_NAME}" --pattern SHA256SUMS --output - | diff - _out/SHA256SUMS
+            gh release download "${GITHUB_REF_NAME}" --pattern OCI-DIGESTS --output - | diff - _out/OCI-DIGESTS
           else
             make release TAG="${GITHUB_REF_NAME}"
           fi
