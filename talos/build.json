@@ -1,7 +1,7 @@
 {
   "repository": "https://github.com/siderolabs/talos.git",
   "commit": "2f86b9d2a29b413deddd7122a8420b8913813615",
-  "kernel_release": "6.17.13-talos-dgx1022-buildonly",
+  "kernel_release": "6.17.13-talos-dgx1022",
   "build_args": {
     "ABBREV_TAG": "v1.14.1",
     "ARTIFACTS": "_out",

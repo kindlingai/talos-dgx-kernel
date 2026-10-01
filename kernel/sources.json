@@ -1,9 +1,9 @@
 {
-  "kernel_release": "6.17.13-talos-dgx1022-buildonly",
+  "kernel_release": "6.17.13-talos-dgx1022",
   "source_date_epoch": 1789481248,
   "canonical_commit": "12ecf28e667f47335166fa29efe0cc906dc02fb9",
   "dsc_signer_fingerprint": "AE7D31FF19C227A5D7D425B1A08D6CD18E2BC802",
-  "config_sha256": "35c82c0c75abb81603fdf96d037cccec107edef248dd75519b1b4e3e16f45673",
+  "config_sha256": "e294a58243d7675d4dc4eec460f224b49243c78303b959609f80fc7bb49a31c6",
   "downloads": [
     {
       "filename": "linux-nvidia-6.17_6.17.0.orig.tar.gz",

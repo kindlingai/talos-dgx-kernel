@@ -24,7 +24,7 @@ assert platform.machine() == 'x86_64'
 assert re.search(r'^flags\s*:.*\blm\b', Path('/proc/cpuinfo').read_text(), re.M), 'AMD64 host CPU required; no emulation'
 assert 'clang version 22.1.8' in subprocess.check_output(['clang', '--version'], text=True)
 assert subprocess.check_output(['pahole', '--version'], text=True).strip() == 'v1.31'
-assert hashlib.sha256(Path('/input/kernel/config').read_bytes()).hexdigest() == '35c82c0c75abb81603fdf96d037cccec107edef248dd75519b1b4e3e16f45673', 'Unpinned kernel config'
+assert hashlib.sha256(Path('/input/kernel/config').read_bytes()).hexdigest() == 'e294a58243d7675d4dc4eec460f224b49243c78303b959609f80fc7bb49a31c6', 'Unpinned kernel config'
 for name in ['/work', '/work/src', '/work/nvidia/kernel', '/work/gds/src']:
     p = Path(name)
     assert p.is_dir() and p.resolve() == p, f'Missing or redirected source directory: {p}'
@@ -43,7 +43,7 @@ export KBUILD_BUILD_VERSION=1
 export MAKEFLAGS='JOBS=1'
 linker="ld.lld --thinlto-cache-dir=/work/lto-cache --thinlto-jobs=$jobs --threads=$jobs"
 kmake() { make -C /work/src -j"$jobs" LD="$linker" "$@"; }
-export KVER=6.17.13-talos-dgx1022-buildonly
+export KVER=6.17.13-talos-dgx1022
 cd /work/src
 cp /input/kernel/config .config
 cp /input/kernel/x509.genkey certs/x509.genkey

@@ -229,7 +229,7 @@ class StageTests(Workspace):
         sbom_path = rootfs / "usr/local/share/spdx/kmod-nvidia-lts.spdx.json"
         sbom = json.loads(sbom_path.read_text())
         self.assertEqual(len(sbom["files"]), 10)  # six modules, three metadata files, modprobe policy
-        self.assertIn("580.178.04-v1.14.1-dgx1022-buildonly", (extension / "manifest.yaml").read_text())
+        self.assertIn("580.178.04-v1.14.1-dgx1022", (extension / "manifest.yaml").read_text())
         hashes = []
         for item in sbom["files"]:
             path = rootfs / item["fileName"]

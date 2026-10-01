@@ -1,7 +1,7 @@
 # Talos DGX kernel
 
 Build the custom ARM64 Talos kernel and installer used on NVIDIA DGX Spark:
-**Talos v1.14.1, Linux 6.17.13-talos-dgx1022-buildonly, NVIDIA 580.178.04**.
+**Talos v1.14.1, Linux 6.17.13-talos-dgx1022, NVIDIA 580.178.04**.
 This is a Talos installer, not an Ubuntu/DGX OS package.
 
 The source/configuration comes from the boot-tested build. These standalone
