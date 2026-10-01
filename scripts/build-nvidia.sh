@@ -5,13 +5,13 @@
 # module metadata from KERNEL_ROOTFS.
 #
 # Usage: build-nvidia.sh DOWNLOADS KERNEL_ROOTFS EXTENSION_ROOTFS
-# Environment: KERNEL_RELEASE, JOBS (default: nproc)
+# Environment: KERNEL_RELEASE
 set -euo pipefail
 
 downloads=$1
 kernel_rootfs=$2
 rootfs=$3
-jobs=${JOBS:-$(nproc)}
+jobs=$(nproc)
 linux=/src/linux
 nvidia_src=/src/nvidia
 gds_src=/src/gds

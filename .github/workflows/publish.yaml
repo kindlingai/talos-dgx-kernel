@@ -1,0 +1,51 @@
+name: publish
+
+# Pushes a release's installer-arm64.tar to ghcr.io/<repository>/installer:<tag>
+# and adds the pushed digest to the release notes. Runs when a release is
+# published and as the last step of build.yaml.
+on:
+  release:
+    types: [published]
+  workflow_call:
+    inputs:
+      tag:
+        type: string
+        required: true
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Release tag
+        type: string
+        required: true
+
+permissions:
+  contents: write
+  packages: write
+
+jobs:
+  publish:
+    runs-on: ubuntu-24.04-arm
+    env:
+      TAG: ${{ inputs.tag || github.event.release.tag_name }}
+      IMAGE: ghcr.io/${{ github.repository }}/installer
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+    steps:
+      - uses: imjasonh/setup-crane@feee3b6bb0d4c68370f256a4502498c9227e5c6b # v0.7
+        with:
+          version: v0.22.1
+
+      - name: Download installer
+        run: |
+          gh release download "${TAG}" --pattern installer-arm64.tar --pattern SHA256SUMS
+          grep ' installer-arm64.tar$' SHA256SUMS | sha256sum --check
+
+      - name: Push installer image
+        run: |
+          ref=$(crane push installer-arm64.tar "${IMAGE}:${TAG}")
+          gh release view "${TAG}" --json body --jq .body > notes.md
+          if ! grep -qF "${ref}" notes.md; then
+            printf '\nInstaller image: %s\n' "\`${ref}\`" >> notes.md
+            gh release edit "${TAG}" --notes-file notes.md
+          fi
+          echo "${ref}" >> "${GITHUB_STEP_SUMMARY}"

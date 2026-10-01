@@ -2,11 +2,27 @@
 
 Talos Linux **v1.14.1** for NVIDIA DGX Spark (arm64), built with:
 
-- **Linux 6.17.13-talos-dgx1022**: Ubuntu `linux-nvidia-6.17` 6.17.0-1022.22 plus the
+- **Linux 6.17.13-talos-dgx1022.1**: Ubuntu `linux-nvidia-6.17` 6.17.0-1022.22 plus the
   patches in `kernel/patches/series`, configured by `kernel/config`.
 - **NVIDIA 580.178.04** proprietary kernel modules and **GPUDirect Storage 2.29.4**
   (`nvidia-fs`), packaged as the `nonfree-kmod-nvidia-lts` system extension.
 - The upstream `nvidia-container-toolkit-lts` system extension.
+
+## Versions
+
+The kernel release is `6.17.13-talos-dgx<ABI>.<revision>`:
+
+- `<ABI>` is the Ubuntu `linux-nvidia-6.17` ABI number the source comes from (`1022`).
+- `<revision>` counts this repository's kernel builds for that ABI. Raise it whenever the
+  kernel changes: config, patches, sources, or toolchain.
+
+Releases are tagged `<Talos version>-dgx<ABI>.<revision>`, for example
+`v1.14.1-dgx1022.1`.
+
+`uname -v` starts with `#<fingerprint>`: the first 12 hex digits of a SHA-256 over the files
+the kernel build reads (`Dockerfile`, `kernel/config`, `kernel/patches/`, `scripts/`). The
+`Makefile` computes it from the file contents, so any change to those files gives a new
+fingerprint, and identical files give the same one on every machine.
 
 ## Outputs
 
@@ -16,7 +32,7 @@ Talos Linux **v1.14.1** for NVIDIA DGX Spark (arm64), built with:
 | --------------------- | ---------------------------------------------------------------------- |
 | `installer-arm64.tar` | Installer image. Push it, then reference it from `machine.install.image` or `talosctl upgrade --image`. |
 | `metal-arm64.iso`     | Bootable installation ISO.                                             |
-| `SHA256SUMS`          | Checksums of the two files above.                                      |
+| `SHA256SUMS`          | Checksums of the installer and the ISO.                                |
 | `oci/kernel`          | Kernel image in the Talos `PKG_KERNEL` layout (OCI layout).            |
 | `oci/nvidia-extension`| NVIDIA system extension image (OCI layout).                            |
 | `oci/installer-base`  | Talos installer base built for this kernel (OCI layout).               |
@@ -67,10 +83,10 @@ Builds run natively on amd64 and arm64 hosts; the kernel always targets arm64.
 
 - Docker Engine or Docker Desktop with buildx. `make` creates a `docker-container`
   builder named `talos-dgx-kernel` running the pinned BuildKit version.
-- GNU Make, Git, and OpenSSL. `crane` for `make push`.
-- Room for the kernel build: about 16 GiB of memory for the builder and 60 GiB of free
-  disk for BuildKit state. `JOBS` sets build parallelism (default: all CPUs); lower it
-  to reduce memory use.
+- GNU Make, Git, and OpenSSL. `crane` for `make push`, `gh` for `make release`.
+- Memory and disk for the kernel build. The build uses every CPU the builder has. A
+  builder with 12 CPUs and 24 GiB of memory builds it; 8 GiB runs out of memory while
+  generating BTF. BuildKit state for one build takes about 30 GiB of disk.
 
 ## Module signing key
 
@@ -108,46 +124,61 @@ follows:
 - Every container image by digest: toolchain and validator (`Dockerfile`), Talos
   packages (`docker-bake.hcl`), container toolkit extension (`talos/*.yaml`), BuildKit
   and the Dockerfile frontend.
-- `SOURCE_DATE_EPOCH` drives Kbuild timestamps, image metadata, and file times; Kbuild
-  user, host, and version are fixed in the toolchain stage.
+- `SOURCE_DATE_EPOCH` drives Kbuild timestamps, image metadata, and file times
+  (`rewrite-timestamp=true` on every image output). Kbuild user and host are fixed in
+  the toolchain stage, and the Kbuild version is the input fingerprint.
 
 To check a build, run `make` again on another machine or a fresh builder
 (`docker buildx prune --builder talos-dgx-kernel -af`) and compare `_out/SHA256SUMS`.
 
-## Publish
+## Release
+
+1. Raise the kernel revision when the kernel changed (see [Versions](#versions)), and commit.
+2. Build with `make`.
+3. Tag the commit and publish the release:
+
+   ```sh
+   git tag v1.14.1-dgx1022.1 && git push origin v1.14.1-dgx1022.1
+   make release
+   ```
+
+`make release` creates the GitHub release for the tag with `installer-arm64.tar`,
+`metal-arm64.iso`, and `SHA256SUMS`. The release notes list the kernel release, its
+`uname -v` fingerprint, and the checksums.
+
+Publishing the release runs `.github/workflows/publish.yaml`. It checks
+`installer-arm64.tar` against `SHA256SUMS`, pushes it to
+`ghcr.io/kindlingai/talos-dgx-kernel/installer:<tag>` with the workflow's `GITHUB_TOKEN`,
+and adds the pushed `image@sha256:digest` reference to the release notes.
+
+`make push` pushes the installer to any registry with `crane` and writes the pushed
+reference to `_out/installer.ref`:
 
 ```sh
-make push                                   # ghcr.io/kindlingai/talos-dgx-kernel/installer:v1.14.1-dgx1022
 make push IMAGE=registry.example.com/talos/installer TAG=test
 ```
 
-`make push` uploads `installer-arm64.tar` with `crane` and writes the pushed
-`image@sha256:digest` reference to `_out/installer.ref`.
-
 ### CI
 
-`.github/workflows/build.yaml` runs `make` on every `v*` tag and on manual dispatch,
-and uploads the outputs as a workflow artifact. For tags it also pushes the installer
-image to `ghcr.io/kindlingai/talos-dgx-kernel/installer:<tag>` and creates a GitHub
-release with the ISO, `SHA256SUMS`, and the installer image digest.
+`.github/workflows/build.yaml` runs `make` for `v*` tags and manual dispatch on the
+runner named by the `BUILD_RUNNER` repository variable, and uploads the outputs as a
+workflow artifact. The job runs when that variable is set. The runner needs the memory
+and disk listed under [Requirements](#requirements); GitHub's standard runners for
+private repositories are smaller.
+
+For a tag without a release, the job runs `make release`, then `publish.yaml`. For a tag
+whose release already exists, the job compares its `SHA256SUMS` with the release's,
+which checks that the release reproduces on that runner.
 
 Repository setup:
 
 - Secret `MODULE_SIGNING_KEY`: contents of `keys/module-signing.pem`.
-- Variable `BUILD_RUNNER` (optional): runner label for the build job. The default,
-  `ubuntu-24.04-arm`, builds natively on arm64; a larger or self-hosted runner shortens
-  the kernel build.
-
-Release a version:
-
-```sh
-git tag v1.14.1-dgx1022 && git push origin v1.14.1-dgx1022
-```
+- Variable `BUILD_RUNNER`: runner label for the build job.
 
 ## Install
 
 Reference the installer image by digest, for example
-`ghcr.io/kindlingai/talos-dgx-kernel/installer:v1.14.1-dgx1022@sha256:<digest>`. When
+`ghcr.io/kindlingai/talos-dgx-kernel/installer:v1.14.1-dgx1022.1@sha256:<digest>`. When
 the package is private, give nodes pull credentials through
 `machine.registries.config`.
 
@@ -165,7 +196,7 @@ the same port under any driver.
    machine:
      install:
        disk: /dev/nvme0n1
-       image: ghcr.io/kindlingai/talos-dgx-kernel/installer:v1.14.1-dgx1022@sha256:<digest>
+       image: ghcr.io/kindlingai/talos-dgx-kernel/installer:v1.14.1-dgx1022.1@sha256:<digest>
    ```
 
    `talosctl gen config ... --install-image <image>` sets the same field.
@@ -180,7 +211,7 @@ the node's configuration and a console path for recovery.
 ```sh
 export TALOSCONFIG=/secure/path/to/talosconfig
 NODE=node-address
-INSTALLER=ghcr.io/kindlingai/talos-dgx-kernel/installer:v1.14.1-dgx1022@sha256:<digest>
+INSTALLER=ghcr.io/kindlingai/talos-dgx-kernel/installer:v1.14.1-dgx1022.1@sha256:<digest>
 
 talosctl --nodes "$NODE" read /proc/sys/kernel/random/boot_id
 
@@ -194,14 +225,15 @@ talosctl --nodes "$NODE" get linkstatus
 talosctl --nodes "$NODE" get extensions
 ```
 
-A healthy node reports kernel `6.17.13-talos-dgx1022`, a new boot ID, a working LAN link
-and default route, Kubernetes `Ready`, and working NVIDIA GPU, CDI, and CUDA workloads.
+A healthy node reports kernel `6.17.13-talos-dgx1022.1` with the release's `uname -v`
+fingerprint, a new boot ID, a working LAN link and default route, Kubernetes `Ready`, and
+working NVIDIA GPU, CDI, and CUDA workloads.
 
 ## Talos source patch
 
 `talos/source.patch` adapts Talos to this kernel:
 
-- `DefaultKernelVersion` is `6.17.13-talos-dgx1022`, so Talos userspace looks up modules
+- `DefaultKernelVersion` is `6.17.13-talos-dgx1022.1`, so Talos userspace looks up modules
   under that release.
 - `hack/modules-arm64.txt` (the modules copied into the initramfs) adds `r8127` and
   drops five entries this kernel provides differently: `hkdf` is built in,
@@ -213,7 +245,7 @@ and default route, Kubernetes `Ready`, and working NVIDIA GPU, CDI, and CUDA wor
 | Change                     | Files                                                                     |
 | -------------------------- | ------------------------------------------------------------------------- |
 | Kernel source or patches   | `Dockerfile` (URLs, checksums), `kernel/patches/`, `kernel/config`, `kernel/kernel.spdx.json` |
-| Kernel release             | `Makefile` (`KERNEL_RELEASE`), `kernel/config` (`CONFIG_LOCALVERSION`), `talos/source.patch`, SPDX and extension manifest |
+| Kernel release (revision)  | `Makefile` (`KERNEL_RELEASE`), `kernel/config` (`CONFIG_LOCALVERSION`), `talos/source.patch`, `extension/manifest.yaml`, both SPDX documents |
 | NVIDIA or GDS              | `Dockerfile` (checksums), `docker-bake.hcl` (versions), `extension/`      |
 | Talos                      | `Makefile` (`TALOS_VERSION`, `TALOS_COMMIT`), `docker-bake.hcl` (arguments from Talos's Makefile, package digests), `talos/source.patch` |
 

@@ -19,9 +19,8 @@ variable "SIGNING_KEY" {
   description = "PEM file holding the module signing private key and certificate"
 }
 
-variable "JOBS" {
-  description = "Kernel build parallelism; empty selects the CPU count"
-  default     = ""
+variable "KBUILD_BUILD_VERSION" {
+  description = "Fingerprint of the kernel build inputs, reported by `uname -v`"
 }
 
 # SOURCE_DATE_EPOCH sets image timestamps; rewrite-timestamp clamps file times.
@@ -41,10 +40,10 @@ target "_kernel" {
   dockerfile = "Dockerfile"
   platforms  = ["linux/arm64"]
   args = {
-    KERNEL_RELEASE = KERNEL_RELEASE
-    NVIDIA_VERSION = "580.178.04"
-    GDS_VERSION    = "2.29.4"
-    JOBS           = JOBS
+    KERNEL_RELEASE       = KERNEL_RELEASE
+    KBUILD_BUILD_VERSION = KBUILD_BUILD_VERSION
+    NVIDIA_VERSION       = "580.178.04"
+    GDS_VERSION          = "2.29.4"
   }
   secret = ["id=module_signing_key,src=${SIGNING_KEY}"]
 }
@@ -183,7 +182,7 @@ target "imager" {
     INSTALLER_ARCH = "arm64"
   }
   tags   = ["talos-dgx-kernel/imager:${TALOS_VERSION}"]
-  output = ["type=docker"]
+  output = ["type=docker,rewrite-timestamp=true"]
 }
 
 group "talos" {

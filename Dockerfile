@@ -39,8 +39,7 @@ ENV PATH=/toolchain/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:
     LLVM=1 \
     CROSS_COMPILE=aarch64-linux-musl- \
     KBUILD_BUILD_USER=talos \
-    KBUILD_BUILD_HOST=dgx-builder \
-    KBUILD_BUILD_VERSION=1
+    KBUILD_BUILD_HOST=dgx-builder
 
 FROM toolchain AS linux-src
 WORKDIR /src/linux
@@ -52,7 +51,8 @@ RUN --mount=type=bind,source=scripts,target=/scripts \
 FROM linux-src AS kernel-build
 ARG KERNEL_RELEASE
 ARG SOURCE_DATE_EPOCH
-ARG JOBS
+# Fingerprint of the build inputs; the kernel reports it in `uname -v`.
+ARG KBUILD_BUILD_VERSION
 RUN --mount=type=bind,source=scripts,target=/scripts \
     --mount=type=bind,source=kernel/config,target=/config \
     --mount=type=secret,id=module_signing_key,required=true \
@@ -64,7 +64,6 @@ COPY --link kernel/kernel.spdx.json /usr/share/spdx/kernel.spdx.json
 
 FROM kernel-build AS nvidia-build
 ARG KERNEL_RELEASE
-ARG JOBS
 WORKDIR /src
 RUN --mount=type=bind,source=scripts,target=/scripts \
     --mount=type=bind,from=downloads,target=/downloads \

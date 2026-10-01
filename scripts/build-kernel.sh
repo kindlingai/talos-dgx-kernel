@@ -6,12 +6,12 @@
 #   ROOTFS/usr/lib/modules/RELEASE   stripped, signed modules
 #
 # Usage: build-kernel.sh CONFIG ROOTFS
-# Environment: KERNEL_RELEASE, SOURCE_DATE_EPOCH, JOBS (default: nproc)
+# Environment: KERNEL_RELEASE, SOURCE_DATE_EPOCH, KBUILD_BUILD_VERSION
 set -euo pipefail
 
 config=$1
 rootfs=$2
-jobs=${JOBS:-$(nproc)}
+jobs=$(nproc)
 
 # CONFIG is the complete olddefconfig output for this toolchain.
 cp "${config}" .config

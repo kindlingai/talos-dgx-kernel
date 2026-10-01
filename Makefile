@@ -3,17 +3,22 @@
 #   make signing-key   create the module signing key (once; keep it)
 #   make               build _out/installer-arm64.tar, _out/metal-arm64.iso, _out/SHA256SUMS
 #   make push          push the installer image to $(IMAGE):$(TAG)
+#   make release       publish GitHub release $(TAG) with the installer, ISO, and SHA256SUMS
 
 TALOS_VERSION     := v1.14.1
 TALOS_COMMIT      := 2f86b9d2a29b413deddd7122a8420b8913813615
 TALOS_REPOSITORY  := https://github.com/siderolabs/talos.git
-KERNEL_RELEASE    := 6.17.13-talos-dgx1022
+KERNEL_RELEASE    := 6.17.13-talos-dgx1022.1
 SOURCE_DATE_EPOCH := 1789481248
+
+# `uname -v` reports this hash of the files the kernel build reads, so two
+# kernels with the same release string identify the inputs they came from.
+KERNEL_INPUTS        := Dockerfile kernel/config $(sort $(wildcard kernel/patches/* scripts/*))
+KBUILD_BUILD_VERSION := $(shell shasum -a 256 $(KERNEL_INPUTS) | shasum -a 256 | cut -c1-12)
 
 TAG         ?= $(TALOS_VERSION)-$(lastword $(subst -, ,$(KERNEL_RELEASE)))
 IMAGE       ?= ghcr.io/kindlingai/talos-dgx-kernel/installer
 SIGNING_KEY ?= $(CURDIR)/keys/module-signing.pem
-JOBS        ?=
 PROGRESS    ?= auto
 
 BUILDER        ?= talos-dgx-kernel
@@ -23,13 +28,13 @@ OUT       := $(CURDIR)/_out
 TALOS_SRC := $(CURDIR)/.work/talos
 IMAGER    := talos-dgx-kernel/imager:$(TALOS_VERSION)
 
-export TALOS_VERSION TALOS_COMMIT KERNEL_RELEASE SOURCE_DATE_EPOCH SIGNING_KEY JOBS OUT TALOS_SRC
+export TALOS_VERSION TALOS_COMMIT KERNEL_RELEASE KBUILD_BUILD_VERSION SOURCE_DATE_EPOCH SIGNING_KEY OUT TALOS_SRC
 
 BAKE   := docker buildx bake --builder $(BUILDER) --progress $(PROGRESS)
 IMAGER_RUN := docker run --rm -i --env SOURCE_DATE_EPOCH \
 	--volume $(OUT)/oci:/oci:ro --volume $(OUT):/out $(IMAGER) - --output /out
 
-.PHONY: all builder signing-key kernel talos-source talos installer iso push clean
+.PHONY: all builder signing-key kernel talos-source talos installer iso push release clean
 
 all: installer iso
 	cd $(OUT) && shasum -a 256 installer-arm64.tar metal-arm64.iso > SHA256SUMS
@@ -75,6 +80,14 @@ iso: talos
 
 push:
 	crane push $(OUT)/installer-arm64.tar $(IMAGE):$(TAG) | tee $(OUT)/installer.ref
+
+# Publishes the GitHub release. Publishing it runs .github/workflows/publish.yaml,
+# which pushes the installer image to GHCR.
+release:
+	{ echo "Linux \`$(KERNEL_RELEASE)\` (\`uname -v\`: \`#$(KBUILD_BUILD_VERSION)\`), Talos $(TALOS_VERSION)."; \
+	  echo; echo '```'; cat $(OUT)/SHA256SUMS; echo '```'; } > $(OUT)/release.md
+	gh release create $(TAG) --verify-tag --title $(TAG) --notes-file $(OUT)/release.md \
+		$(OUT)/installer-arm64.tar $(OUT)/metal-arm64.iso $(OUT)/SHA256SUMS
 
 clean:
 	rm -rf $(OUT) $(CURDIR)/.work
