@@ -1,6 +1,6 @@
-# Imager profile for the Talos installer image (`make installer`).
+# Imager profile for the bootable installation ISO (`make iso`).
 # Paths under /oci are the OCI layouts that `make kernel` and `make talos` export.
-baseProfileName: installer
+baseProfileName: iso
 arch: arm64
 platform: metal
 secureboot: false
@@ -18,5 +18,5 @@ input:
     - ociPath: /oci/nvidia-extension
     - imageRef: ghcr.io/siderolabs/nvidia-container-toolkit-lts@sha256:0ad95abe15402c9bcd21600079c46f2f14263cf469d1a5385d29417ddf03d001
 output:
-  kind: installer
+  kind: iso
   outFormat: raw

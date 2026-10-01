@@ -1,133 +1,191 @@
 # Talos DGX kernel
 
-Build the custom ARM64 Talos kernel and installer used on NVIDIA DGX Spark:
-**Talos v1.14.1, Linux 6.17.13-talos-dgx1022, NVIDIA 580.178.04**.
-This is a Talos installer, not an Ubuntu/DGX OS package.
+Talos Linux **v1.14.1** for NVIDIA DGX Spark (arm64), built with:
 
-The source/configuration comes from the boot-tested build. These standalone
-scripts have syntax/unit checks, but **have not been used for another full build**.
-The repository is a source delivery; it contains no prebuilt installer.
+- **Linux 6.17.13-talos-dgx1022**: Ubuntu `linux-nvidia-6.17` 6.17.0-1022.22 plus the
+  patches in `kernel/patches/series`, configured by `kernel/config`.
+- **NVIDIA 580.178.04** proprietary kernel modules and **GPUDirect Storage 2.29.4**
+  (`nvidia-fs`), packaged as the `nonfree-kmod-nvidia-lts` system extension.
+- The upstream `nvidia-container-toolkit-lts` system extension.
+
+## Outputs
+
+`make` writes to `_out/`:
+
+| File                  | Use                                                                    |
+| --------------------- | ---------------------------------------------------------------------- |
+| `installer-arm64.tar` | Installer image. Push it, then reference it from `machine.install.image` or `talosctl upgrade --image`. |
+| `metal-arm64.iso`     | Bootable installation ISO.                                             |
+| `SHA256SUMS`          | Checksums of the two files above.                                      |
+| `oci/kernel`          | Kernel image in the Talos `PKG_KERNEL` layout (OCI layout).            |
+| `oci/nvidia-extension`| NVIDIA system extension image (OCI layout).                            |
+| `oci/installer-base`  | Talos installer base built for this kernel (OCI layout).               |
+
+## How the build works
+
+```mermaid
+flowchart LR
+  src[Pinned sources<br/>kernel/ extension/] -->|Dockerfile| kernel[oci/kernel]
+  src -->|Dockerfile| ext[oci/nvidia-extension]
+  talos[Talos source<br/>+ talos/source.patch] -->|Talos Dockerfile<br/>PKG_KERNEL=kernel| base[oci/installer-base]
+  kernel --> base
+  talos --> imager[imager image]
+  kernel --> imager
+  imager -->|talos/installer.yaml| installer[installer-arm64.tar]
+  imager -->|talos/iso.yaml| iso[metal-arm64.iso]
+  base --> installer
+  ext --> installer
+  base --> iso
+  ext --> iso
+```
+
+1. **Kernel and extension** (`Dockerfile`, bake group `kernel`). BuildKit downloads the
+   source archives by checksum, applies the patches, builds the kernel with the Sidero
+   Labs LLVM toolchain, then builds the NVIDIA and GDS modules against the same tree. The
+   stage scripts live in `scripts/`; each one checks its output (config, kernel release,
+   module signatures and vermagic, symbol resolution, extension layout).
+2. **Talos images** (bake group `talos`). Talos's own Dockerfile at the pinned commit,
+   with `talos/source.patch` applied, builds `installer-base` and `imager` using the
+   kernel image from step 1 as `PKG_KERNEL`.
+3. **Boot assets**. The imager turns the installer base and both extensions into the
+   installer image and the ISO, using the profiles in `talos/`.
+
+Builds run natively on amd64 and arm64 hosts; the kernel always targets arm64.
+
+| Path                    | Contents                                                     |
+| ----------------------- | ------------------------------------------------------------ |
+| `Makefile`              | Entry point and the cross-cutting pins (Talos version and commit, kernel release, `SOURCE_DATE_EPOCH`). |
+| `Dockerfile`            | Kernel and NVIDIA extension stages, source URLs and checksums, toolchain images. |
+| `docker-bake.hcl`       | Build targets, outputs, and the Talos build arguments with package images pinned by digest. |
+| `scripts/`              | Stage scripts run inside the build.                         |
+| `kernel/`               | Kernel config, patches, SPDX document, signing key template. |
+| `extension/`            | NVIDIA extension manifest, modprobe policy, SPDX document.   |
+| `talos/`                | Talos source patch and imager profiles.                      |
+| `.github/workflows/`    | CI build and release.                                        |
 
 ## Requirements
 
-- Native **Linux AMD64** build host with local Docker Engine and Docker buildx.
-  The compiler cross-builds ARM64; Docker Desktop on ARM64 is not supported.
-- Python 3.9+, Git, internet access to the source/image registries.
-- At least **4 CPUs and 30 GiB RAM available to the build container**. This is
-  the allocation used successfully before extraction into this repository.
-- A private work directory on a case-sensitive Linux filesystem, with space for
-  the kernel source, objects, ThinLTO cache, downloaded images, and installer.
-- For installation: a compatible existing Talos system, matching `talosctl`,
-  that node's own credentials, registry access, and console/recovery access.
+- Docker Engine or Docker Desktop with buildx. `make` creates a `docker-container`
+  builder named `talos-dgx-kernel` running the pinned BuildKit version.
+- GNU Make, Git, and OpenSSL. `crane` for `make push`.
+- Room for the kernel build: about 16 GiB of memory for the builder and 60 GiB of free
+  disk for BuildKit state. `JOBS` sets build parallelism (default: all CPUs); lower it
+  to reduce memory use.
+
+## Module signing key
+
+The kernel embeds the certificate of one signing key and enforces module signatures
+(`module.sig_enforce=1`). Every build signs all modules, including the NVIDIA ones, with
+this key. Keeping the key fixed makes builds reproducible and lets separately built
+extensions load on the same kernel.
+
+Create it once:
+
+```sh
+make signing-key   # writes keys/module-signing.pem (private key + certificate)
+```
+
+Store `keys/module-signing.pem` in your secret manager and add its contents as the
+`MODULE_SIGNING_KEY` repository secret for CI. Use the same file for every build of a
+release; `SIGNING_KEY=/path/to/key.pem` selects a key stored elsewhere.
 
 ## Build
 
-Run these commands on the build host, from a fresh clone:
-
 ```sh
-git clone git@github.com:coffee-the-dev/talos-dgx-kernel.git
-cd talos-dgx-kernel
-umask 077
-mkdir -p .work
-
-docker build --platform linux/amd64 \
-  --file kernel/Toolchain.Dockerfile --tag talos-dgx-kernel/toolchain:local kernel
-
-# Download checksum-locked sources, apply the vendor delta and 20 ordered patches.
-docker run --rm --platform linux/amd64 \
-  --mount "type=bind,src=$PWD,dst=/input,readonly" \
-  --mount "type=bind,src=$PWD/.work,dst=/work" \
-  talos-dgx-kernel/toolchain:local python3 /input/prepare.py --work /work
-
-# Compile/sign the kernel and matching NVIDIA/GDS modules, without network access.
-docker run --rm --platform linux/amd64 --network none \
-  --cpus 4 --memory 30g --memory-swap 30g --pids-limit 512 \
-  --mount "type=bind,src=$PWD,dst=/input,readonly" \
-  --mount "type=bind,src=$PWD/.work,dst=/work" \
-  talos-dgx-kernel/toolchain:local
-
-# Build the corrected Talos userspace and assemble the ARM64 installer.
-python3 package.py
+make            # kernel, extension, Talos images, installer, ISO, SHA256SUMS
 ```
 
-Output: **`out/installer-arm64.tar`**, plus its SHA256 printed by `package.py`.
-The packaging stage uses Talos's pinned Dockerfile/build targets and imager,
-not a replacement OS build system. It does not publish or install anything.
+Individual steps: `make kernel`, `make talos`, `make installer`, `make iso`. BuildKit
+caches every stage, so repeated runs rebuild only what changed. `make clean` removes
+`_out/` and the Talos checkout in `.work/`.
 
-Preparation deliberately refuses an existing source tree. To resume a failed
-compilation, rerun the compilation command, not source preparation. To start a
-new independent build, use a separate clone/work directory. Never copy the
-entire `.work` directory into an image, repository, or release.
+### Reproducibility
 
-### What is pinned and checked
+The same inputs and signing key produce the same `SHA256SUMS`. Inputs are pinned as
+follows:
 
-- Vendor source archives, NVIDIA/GDS downloads, final config, and ordered patches:
-  `kernel/sources.json` and `kernel/series`.
-- LLVM/tools container images and 58 Talos build-image references: immutable
-  digests in `kernel/Toolchain.Dockerfile` and `talos/build.json`.
-- Exact Talos source commit, version-constant/module-selection patch, installer
-  profile, and NVIDIA extension recipe.
-- Compilation checks kernel configuration/release, ARM64 image, BTF, module
-  signatures against the embedded certificate, matching vermagic, and module
-  dependency resolution. Packaging checks the selected modules and the resulting
-  installer's architecture, embedded kernel, release, and default boot arguments.
+- Source archives by SHA-256 (`Dockerfile`), Talos by commit (`Makefile`).
+- Every container image by digest: toolchain and validator (`Dockerfile`), Talos
+  packages (`docker-bake.hcl`), container toolkit extension (`talos/*.yaml`), BuildKit
+  and the Dockerfile frontend.
+- `SOURCE_DATE_EPOCH` drives Kbuild timestamps, image metadata, and file times; Kbuild
+  user, host, and version are fixed in the toolchain stage.
 
-Each work directory generates a **new private module-signing key**. It stays in
-`.work/src/certs/signing_key.pem`; only its public certificate is embedded in the
-kernel. Separate builds are therefore **not byte-identical**. Do not replace a
-module independently with one signed by another build's key. UEFI Secure Boot
-is disabled in this installer profile; kernel module-signature enforcement remains
-on. Secure Boot enablement is outside this recipe.
+To check a build, run `make` again on another machine or a fresh builder
+(`docker buildx prune --builder talos-dgx-kernel -af`) and compare `_out/SHA256SUMS`.
 
-## Publish and install
-
-**No command in the build section changes a target machine.** Installation below
-is a separate, explicitly chosen operation. Build once and use that installer on
-multiple compatible Sparks; each keeps its own machine configuration and identity.
-
-### Publish to your registry
-
-Authenticate to your registry using its normal tooling, then substitute your own
-repository in `IMAGE`. Do not commit registry credentials.
+## Publish
 
 ```sh
-IMAGE=registry.example.com/your-project/talos-dgx-kernel:v1.14.1
-docker load --input out/installer-arm64.tar
-docker tag talos-dgx-kernel/installer:v1.14.1 "$IMAGE"
-docker push "$IMAGE"
-docker image inspect "$IMAGE" --format '{{json .RepoDigests}}'
+make push                                   # ghcr.io/kindlingai/talos-dgx-kernel/installer:v1.14.1-dgx1022
+make push IMAGE=registry.example.com/talos/installer TAG=test
 ```
 
-Use the pushed **repository@sha256:digest** for installation. The node must be
-able to pull it, including any private-registry authentication. A supported Talos
-LAN image cache is an alternative; the example hostname above is only a placeholder.
+`make push` uploads `installer-arm64.tar` with `crane` and writes the pushed
+`image@sha256:digest` reference to `_out/installer.ref`.
 
-### One node at a time
+### CI
 
-1. Confirm its hardware and compatibility with this Talos version. Back up its
-   configuration and credentials **outside this repository**, and retain a
-   known-good boot entry and console recovery path.
-2. Identify the LAN NIC's permanent MAC. Select the interface independently of
-   its driver name: the stock kernel used `r8169`, while this kernel uses `r8127`
-   for RTL8127. Do not copy another machine's MAC, addresses, identity, or secrets.
-3. Arrange workload draining and PodDisruptionBudgets. Upgrade only one node,
-   verify it, then proceed to the next.
+`.github/workflows/build.yaml` runs `make` on every `v*` tag and on manual dispatch,
+and uploads the outputs as a workflow artifact. For tags it also pushes the installer
+image to `ghcr.io/kindlingai/talos-dgx-kernel/installer:<tag>` and creates a GitHub
+release with the ISO, `SHA256SUMS`, and the installer image digest.
 
-Example for an existing compatible Talos node, after those checks:
+Repository setup:
+
+- Secret `MODULE_SIGNING_KEY`: contents of `keys/module-signing.pem`.
+- Variable `BUILD_RUNNER` (optional): runner label for the build job. The default,
+  `ubuntu-24.04-arm`, builds natively on arm64; a larger or self-hosted runner shortens
+  the kernel build.
+
+Release a version:
 
 ```sh
-# Set these yourself; keep credentials outside the checkout.
+git tag v1.14.1-dgx1022 && git push origin v1.14.1-dgx1022
+```
+
+## Install
+
+Reference the installer image by digest, for example
+`ghcr.io/kindlingai/talos-dgx-kernel/installer:v1.14.1-dgx1022@sha256:<digest>`. When
+the package is private, give nodes pull credentials through
+`machine.registries.config`.
+
+The DGX Spark LAN port uses the Realtek `r8127` driver in this kernel. Select network
+interfaces by MAC address (`deviceSelector.hardwareAddr`) so the configuration matches
+the same port under any driver.
+
+### New machine from the ISO
+
+1. Write `metal-arm64.iso` to a USB drive and boot the Spark from it. Talos starts in
+   maintenance mode with this kernel and its network drivers.
+2. Point the machine configuration at the installer image:
+
+   ```yaml
+   machine:
+     install:
+       disk: /dev/nvme0n1
+       image: ghcr.io/kindlingai/talos-dgx-kernel/installer:v1.14.1-dgx1022@sha256:<digest>
+   ```
+
+   `talosctl gen config ... --install-image <image>` sets the same field.
+3. Apply it: `talosctl apply-config --insecure --nodes <ip> --file controlplane.yaml`.
+   Talos installs from the installer image and reboots into the installed system.
+
+### Upgrade a running Talos node
+
+Upgrade one node at a time and confirm it is healthy before moving on. Keep a backup of
+the node's configuration and a console path for recovery.
+
+```sh
 export TALOSCONFIG=/secure/path/to/talosconfig
-NODE=your-node-address
-INSTALLER=registry.example.com/your-project/talos-dgx-kernel@sha256:YOUR_PUSHED_DIGEST
+NODE=node-address
+INSTALLER=ghcr.io/kindlingai/talos-dgx-kernel/installer:v1.14.1-dgx1022@sha256:<digest>
 
 talosctl --nodes "$NODE" read /proc/sys/kernel/random/boot_id
 
-# Stages the upgrade but does NOT drain or reboot the node.
+# Stage the upgrade, then drain and power-cycle the node.
 talosctl --nodes "$NODE" upgrade --image "$INSTALLER" --no-reboot
-
-# Restore any temporary delivery configuration before rebooting.
-# This is the disruptive step: drain workloads, then perform a full powercycle.
 talosctl --nodes "$NODE" reboot --mode powercycle --drain --wait
 
 talosctl --nodes "$NODE" read /proc/version
@@ -136,41 +194,36 @@ talosctl --nodes "$NODE" get linkstatus
 talosctl --nodes "$NODE" get extensions
 ```
 
-Require the expected kernel release, a new boot ID, working LAN/default route and
-Talos API, Kubernetes Ready, and working NVIDIA GPU/CDI/CUDA before upgrading the
-next node. Check that workloads are restored and the node is schedulable according
-to your maintenance plan. If boot fails, recover through the retained known-good
-boot entry using the console. **Do not use reset, wipe, or a fresh-install command
-as an upgrade shortcut.** This guide covers upgrades, not blank-disk provisioning.
+A healthy node reports kernel `6.17.13-talos-dgx1022`, a new boot ID, a working LAN link
+and default route, Kubernetes `Ready`, and working NVIDIA GPU, CDI, and CUDA workloads.
 
-## Small checks without building
+## Talos source patch
 
-```sh
-bash -n kernel/build.sh
-python3 -m py_compile prepare.py package.py
-python3 -m unittest discover -s tests -v
-python3 package.py --plan
-```
+`talos/source.patch` adapts Talos to this kernel:
 
-`--plan` makes no Docker calls or downloads. Tests use clearly marked fixtures;
-they are not evidence that a new kernel was compiled or booted.
+- `DefaultKernelVersion` is `6.17.13-talos-dgx1022`, so Talos userspace looks up modules
+  under that release.
+- `hack/modules-arm64.txt` (the modules copied into the initramfs) adds `r8127` and
+  drops five entries this kernel provides differently: `hkdf` is built in,
+  `libie_fwlog` is part of `ice.ko`, and `libeth_xdp`, `dwmac-sun55i`, and
+  `pcs-rzn1-miic` are deselected in `kernel/config`.
 
-## Packaging differences from stock Talos
+## Updating
 
-The vendor kernel supplies the Realtek `r8127` driver. Talos's module list must
-explicitly include it. That list also omits five files the vendor build does not
-produce: HKDF is built in; Intel firmware logging is inside `ice.ko`; `libeth_xdp`
-is unselected; Allwinner Sun55i support is absent; Renesas RZ/N1 PCS is unselected.
-The main `libeth`, `libie`, `ice`, `r8169`, and Mellanox modules remain.
+| Change                     | Files                                                                     |
+| -------------------------- | ------------------------------------------------------------------------- |
+| Kernel source or patches   | `Dockerfile` (URLs, checksums), `kernel/patches/`, `kernel/config`, `kernel/kernel.spdx.json` |
+| Kernel release             | `Makefile` (`KERNEL_RELEASE`), `kernel/config` (`CONFIG_LOCALVERSION`), `talos/source.patch`, SPDX and extension manifest |
+| NVIDIA or GDS              | `Dockerfile` (checksums), `docker-bake.hcl` (versions), `extension/`      |
+| Talos                      | `Makefile` (`TALOS_VERSION`, `TALOS_COMMIT`), `docker-bake.hcl` (arguments from Talos's Makefile, package digests), `talos/source.patch` |
 
-The Talos kernel-version constant is rebuilt along with userspace. Do not create
-a fake module-directory symlink or use a stock imager with the wrong release.
+`kernel/config` is the full output of `make olddefconfig` for the pinned toolchain; the
+build stops when the two differ, so regenerate the config after toolchain or source
+changes.
 
 ## Licenses
 
-Kernel/vendor code and patches retain their upstream license notices (principally
-GPL-2.0-only); Talos source changes are under its MPL-2.0 terms. Downloaded NVIDIA
-proprietary components retain NVIDIA's license. This private repository does not
-grant blanket redistribution rights over downloaded sources or generated images.
-Review those component licenses before distributing binaries. No private signing
-keys, cluster credentials, benchmark data, or investigation archives are included.
+Kernel sources and patches keep their upstream license notices (principally
+GPL-2.0-only). Talos source changes follow Talos's MPL-2.0 terms. NVIDIA proprietary
+components are under NVIDIA's license; review it and the other component licenses
+before distributing built images.
