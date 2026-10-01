@@ -1,0 +1,25 @@
+baseProfileName: installer
+arch: arm64
+platform: metal
+secureboot: false
+version: v1.14.1
+customization:
+  extraKernelArgs:
+    - -init_on_alloc
+    - -nvme_core.io_timeout
+    - arm64.nobti
+    - pci=pcie_bus_safe
+input:
+  kernel:
+    path: /assets/vmlinuz-arm64
+  initramfs:
+    path: /assets/initramfs-arm64.xz
+  baseInstaller:
+    imageRef: talos-dgx-kernel/installer:v1.14.1
+    ociPath: /assets/installer-base
+  systemExtensions:
+    - tarballPath: /assets/nonfree-kmod-nvidia-lts.tar
+    - imageRef: ghcr.io/siderolabs/nvidia-container-toolkit-lts@sha256:0ad95abe15402c9bcd21600079c46f2f14263cf469d1a5385d29417ddf03d001
+output:
+  kind: installer
+  outFormat: raw
