@@ -6,6 +6,8 @@ Talos Linux **v1.14.1** for NVIDIA DGX Spark (arm64), built with:
   patches in `kernel/patches/series`, configured by `kernel/config` with 64 KiB pages.
 - **NVIDIA 580.178.04** proprietary kernel modules and **GPUDirect Storage 2.29.4**
   (`nvidia-fs`), packaged as the `nonfree-kmod-nvidia-lts` system extension.
+- **dispram**: the `dispramd` service, which lends the 2046 MiB GB10 display carveout to
+  CUDA processes ([dispram/README.md](dispram/README.md)).
 - The upstream `nvidia-container-toolkit-lts` system extension.
 
 ## Page size
@@ -53,14 +55,15 @@ fingerprint, and identical files give the same one on every machine.
 | `OCI-DIGESTS`         | Manifest digests of the images below; identical for identical inputs.  |
 | `oci/kernel`          | Kernel image in the Talos `PKG_KERNEL` layout (OCI layout).            |
 | `oci/nvidia-extension`| NVIDIA system extension image (OCI layout).                            |
+| `oci/dispram-extension`| dispram system extension image (OCI layout).                          |
 | `oci/installer-base`  | Talos installer base built for this kernel (OCI layout).               |
 
 ## How the build works
 
 ```mermaid
 flowchart LR
-  src[Pinned sources<br/>kernel/ extension/] -->|Dockerfile| kernel[oci/kernel]
-  src -->|Dockerfile| ext[oci/nvidia-extension]
+  src[Pinned sources<br/>kernel/ extension/ dispram/] -->|Dockerfile| kernel[oci/kernel]
+  src -->|Dockerfile| ext[oci/nvidia-extension<br/>oci/dispram-extension]
   talos[Talos source<br/>+ talos/source.patch] -->|Talos Dockerfile<br/>PKG_KERNEL=kernel| base[oci/installer-base]
   kernel --> base
   talos --> imager[imager image]
@@ -73,11 +76,12 @@ flowchart LR
   ext --> iso
 ```
 
-1. **Kernel and extension** (`Dockerfile`, bake group `kernel`). BuildKit downloads the
+1. **Kernel and extensions** (`Dockerfile`, bake group `kernel`). BuildKit downloads the
    source archives by checksum, applies the patches, builds the kernel with the Sidero
-   Labs LLVM toolchain, then builds the NVIDIA and GDS modules against the same tree. The
-   stage scripts live in `scripts/`; each one checks its output (config, kernel release,
-   module signatures and vermagic, symbol resolution, extension layout).
+   Labs LLVM toolchain, then builds the NVIDIA and GDS modules against the same tree, and
+   `dispramd` against the RM headers of the same driver release. The stage scripts live
+   in `scripts/`; each one checks its output (config, kernel release, module signatures
+   and vermagic, symbol resolution, extension layout).
 2. **Talos images** (bake group `talos`). Talos's own Dockerfile at the pinned commit,
    with `talos/source.patch` applied, builds `installer-base` and `imager` using the
    kernel image from step 1 as `PKG_KERNEL`.
@@ -94,6 +98,7 @@ Builds run natively on amd64 and arm64 hosts; the kernel always targets arm64.
 | `scripts/`              | Stage scripts run inside the build.                         |
 | `kernel/`               | Kernel config, patches, SPDX document, signing key template. |
 | `extension/`            | NVIDIA extension manifest, modprobe policy, SPDX document.   |
+| `dispram/`              | `dispramd` source, extension manifest and service definition. |
 | `talos/`                | Talos source patch and imager profiles.                      |
 | `.github/workflows/`    | CI build and release.                                        |
 
@@ -270,8 +275,8 @@ working NVIDIA GPU, CDI, and CUDA workloads.
 | Change                     | Files                                                                     |
 | -------------------------- | ------------------------------------------------------------------------- |
 | Kernel source or patches   | `Dockerfile` (URLs, checksums), `kernel/patches/`, `kernel/config`, `kernel/kernel.spdx.json` |
-| Kernel release (revision)  | `Makefile` (`KERNEL_RELEASE`), `kernel/config` (`CONFIG_LOCALVERSION`), `talos/source.patch`, `extension/manifest.yaml`, both SPDX documents |
-| NVIDIA or GDS              | `Dockerfile` (checksums), `docker-bake.hcl` (versions), `extension/`      |
+| Kernel release (revision)  | `Makefile` (`KERNEL_RELEASE`), `kernel/config` (`CONFIG_LOCALVERSION`), `talos/source.patch`, `extension/manifest.yaml`, `dispram/manifest.yaml`, both SPDX documents |
+| NVIDIA or GDS              | `Dockerfile` (checksums, including open-gpu-kernel-modules), `docker-bake.hcl` (versions), `extension/`, `dispram/manifest.yaml` |
 | Talos                      | `Makefile` (`TALOS_VERSION`, `TALOS_COMMIT`), `docker-bake.hcl` (arguments from Talos's Makefile, package digests), `talos/source.patch` |
 
 `kernel/config` is the full output of `make olddefconfig` for the pinned toolchain; the

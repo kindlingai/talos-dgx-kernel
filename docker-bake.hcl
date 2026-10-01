@@ -60,8 +60,14 @@ target "nvidia-extension" {
   output   = ["type=oci,tar=false,rewrite-timestamp=true,dest=${OUT}/oci/nvidia-extension"]
 }
 
+target "dispram-extension" {
+  inherits = ["_kernel"]
+  target   = "dispram-extension"
+  output   = ["type=oci,tar=false,rewrite-timestamp=true,dest=${OUT}/oci/dispram-extension"]
+}
+
 group "kernel" {
-  targets = ["kernel", "nvidia-extension"]
+  targets = ["kernel", "nvidia-extension", "dispram-extension"]
 }
 
 # Talos's own Dockerfile, built with the arguments its Makefile passes at
