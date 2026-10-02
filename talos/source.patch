@@ -60,7 +60,7 @@ index 8df7a5a..41e2bff 100644
  const (
  	// DefaultKernelVersion is the default Linux kernel version.
 -	DefaultKernelVersion = "6.18.51-talos"
-+	DefaultKernelVersion = "6.17.13-talos-dgx1022.4"
++	DefaultKernelVersion = "6.17.13-talos-dgx1022.5"
  
  	// KernelParamConfig is the kernel parameter name for specifying the URL.
  	// to the config.

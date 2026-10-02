@@ -2,7 +2,7 @@
 
 Talos Linux **v1.14.1** for NVIDIA DGX Spark (arm64), built with:
 
-- **Linux 6.17.13-talos-dgx1022.4**: Ubuntu `linux-nvidia-6.17` 6.17.0-1022.22 plus the
+- **Linux 6.17.13-talos-dgx1022.5**: Ubuntu `linux-nvidia-6.17` 6.17.0-1022.22 plus the
   patches in `kernel/patches/series`, configured by `kernel/config` with 64 KiB pages.
 - **NVIDIA 580.178.04** open GPU kernel modules and **GPUDirect Storage 2.29.4**
   (`nvidia-fs`), packaged as the `nvidia-open-gpu-kernel-modules-lts` system extension.
@@ -38,6 +38,26 @@ as Ubuntu's `linux-modules-nvidia-580-open-*-nvidia-64k` packages do.
   again on the stale TLB entry and stalls. libcuda triggers this: before a pageable
   copy it populates `[align_down(start), align_down(start) + size)`, which leaves the
   last page unpopulated when `start` is unaligned.
+- `0002-nvidia-uvm-pack-user-leaf-page-tables.patch` (Christopher Owen,
+  [dgx-spark-memory-saver](https://github.com/christopherowen/dgx-spark-memory-saver)):
+  nvidia-uvm backs each GPU page table with a whole CPU page. On GB10 the tables for
+  64 KiB GPU pages are 256 bytes, one per 2 MiB of GPU-mapped memory, so upstream spends
+  64 KiB per 2 MiB on a 64 KiB kernel (3.1%, about 3 GiB for a 100 GiB model) against
+  4 KiB on a 4 KiB kernel. The patch gives each of these tables a 4 KiB slot in a shared
+  64 KiB page, sixteen per page, which brings the overhead back to that of 4 KiB pages.
+  It applies only to user page trees on a coherent integrated GPU without vidmem; every
+  other table keeps the upstream allocator. The read-only `nvidia_uvm` parameter
+  `uvm_pack_sysmem_leaf_tables` (default `1`) set to `0` restores the upstream
+  allocator, through the machine configuration:
+
+  ```yaml
+  machine:
+    kernel:
+      modules:
+        - name: nvidia_uvm
+          parameters:
+            - uvm_pack_sysmem_leaf_tables=0
+  ```
 
 Drivers from 590.44.01 on also need
 [NVIDIA/open-gpu-kernel-modules#1269](https://github.com/NVIDIA/open-gpu-kernel-modules/issues/1269)
@@ -49,11 +69,11 @@ meet.
 The kernel release is `6.17.13-talos-dgx<ABI>.<revision>`:
 
 - `<ABI>` is the Ubuntu `linux-nvidia-6.17` ABI number the source comes from (`1022`).
-- `<revision>` counts this repository's kernel builds for that ABI. Raise it whenever the
-  kernel changes: config, patches, sources, or toolchain.
+- `<revision>` counts this repository's builds for that ABI. Raise it whenever the kernel
+  or an extension changes: config, patches, sources, or toolchain.
 
 Releases are tagged `<Talos version>-dgx<ABI>.<revision>`, for example
-`v1.14.1-dgx1022.4`.
+`v1.14.1-dgx1022.5`.
 
 `uname -v` starts with `#<fingerprint>`: the first 12 hex digits of a SHA-256 over the files
 the kernel build reads (`Dockerfile`, `kernel/config`, `kernel/patches/`, `scripts/`). The
@@ -180,18 +200,18 @@ To check a build, run `make` again on another machine or a fresh builder
 
 ## Release
 
-1. Raise the kernel revision when the kernel changed (see [Versions](#versions)), and commit.
-2. Build with `make`.
-3. Tag the commit and publish the release:
+1. Raise the revision (see [Versions](#versions)) and commit.
+2. Push the commit and a tag for it:
 
    ```sh
-   git tag v1.14.1-dgx1022.4 && git push origin v1.14.1-dgx1022.4
-   make release
+   git tag v1.14.1-dgx1022.5 && git push origin main v1.14.1-dgx1022.5
    ```
 
-`make release` creates the GitHub release for the tag with `installer-arm64.tar`,
-`metal-arm64.iso`, `SHA256SUMS`, and `OCI-DIGESTS`. The release notes list the kernel
-release, its `uname -v` fingerprint, the checksums, and the image digests.
+The tag starts `.github/workflows/build.yaml` ([CI](#ci)), which builds everything and
+runs `make release`. That creates the GitHub release for the tag with
+`installer-arm64.tar`, `metal-arm64.iso`, `SHA256SUMS`, and `OCI-DIGESTS`. The release
+notes list the kernel release, its `uname -v` fingerprint, the checksums, and the image
+digests. `make release` also works from a local build, before CI reaches that step.
 
 Publishing the release runs `.github/workflows/publish.yaml`. It checks
 `installer-arm64.tar` against `SHA256SUMS`, pushes it to
@@ -224,7 +244,7 @@ Repository setup:
 ## Install
 
 Reference the installer image by digest, for example
-`ghcr.io/kindlingai/talos-dgx-kernel/installer:v1.14.1-dgx1022.4@sha256:<digest>`. When
+`ghcr.io/kindlingai/talos-dgx-kernel/installer:v1.14.1-dgx1022.5@sha256:<digest>`. When
 the package is private, give nodes pull credentials through
 `machine.registries.config`.
 
@@ -257,7 +277,7 @@ every Spark.
    machine:
      install:
        disk: /dev/nvme0n1
-       image: ghcr.io/kindlingai/talos-dgx-kernel/installer:v1.14.1-dgx1022.4@sha256:<digest>
+       image: ghcr.io/kindlingai/talos-dgx-kernel/installer:v1.14.1-dgx1022.5@sha256:<digest>
    ```
 
    `talosctl gen config ... --install-image <image>` sets the same field.
@@ -272,7 +292,7 @@ the node's configuration and a console path for recovery.
 ```sh
 export TALOSCONFIG=/secure/path/to/talosconfig
 NODE=node-address
-INSTALLER=ghcr.io/kindlingai/talos-dgx-kernel/installer:v1.14.1-dgx1022.4@sha256:<digest>
+INSTALLER=ghcr.io/kindlingai/talos-dgx-kernel/installer:v1.14.1-dgx1022.5@sha256:<digest>
 
 talosctl --nodes "$NODE" read /proc/sys/kernel/random/boot_id
 
@@ -286,7 +306,7 @@ talosctl --nodes "$NODE" get linkstatus
 talosctl --nodes "$NODE" get extensions
 ```
 
-A healthy node reports kernel `6.17.13-talos-dgx1022.4` with the release's `uname -v`
+A healthy node reports kernel `6.17.13-talos-dgx1022.5` with the release's `uname -v`
 fingerprint, a new boot ID, a working LAN link and default route, Kubernetes `Ready`, and
 working NVIDIA GPU, CDI, and CUDA workloads.
 
@@ -294,7 +314,7 @@ working NVIDIA GPU, CDI, and CUDA workloads.
 
 `talos/source.patch` adapts Talos to this kernel:
 
-- `DefaultKernelVersion` is `6.17.13-talos-dgx1022.4`, so Talos userspace looks up modules
+- `DefaultKernelVersion` is `6.17.13-talos-dgx1022.5`, so Talos userspace looks up modules
   under that release.
 - `hack/modules-arm64.txt` (the modules copied into the initramfs) adds `r8127` and
   drops six entries this kernel provides differently: `hkdf` is built in,
