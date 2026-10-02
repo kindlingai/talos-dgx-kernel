@@ -1,8 +1,7 @@
 name: build
 
-# Builds the installer image and ISO on the runner named by the BUILD_RUNNER
-# repository variable. That runner needs about 16 GB of memory and 60 GB of
-# free disk; the job runs only when the variable is set.
+# Builds the installer image and ISO on a 16-vCPU Blacksmith arm64 runner. The
+# build needs about 16 GB of memory and 60 GB of free disk.
 #
 # On a version tag (v*), the job publishes the release with `make release` and
 # publish.yaml pushes the installer image. When the release already exists, the
@@ -21,8 +20,7 @@ concurrency:
 
 jobs:
   build:
-    if: vars.BUILD_RUNNER != ''
-    runs-on: ${{ vars.BUILD_RUNNER }}
+    runs-on: blacksmith-16vcpu-ubuntu-2404-arm
     timeout-minutes: 360
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1

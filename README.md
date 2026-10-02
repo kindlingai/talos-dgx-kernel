@@ -207,11 +207,11 @@ make push IMAGE=registry.example.com/talos/installer TAG=test
 
 ### CI
 
-`.github/workflows/build.yaml` runs `make` for `v*` tags and manual dispatch on the
-runner named by the `BUILD_RUNNER` repository variable, and uploads the outputs as a
-workflow artifact. The job runs when that variable is set. The runner needs the memory
-and disk listed under [Requirements](#requirements); GitHub's standard runners for
-private repositories are smaller.
+`.github/workflows/build.yaml` runs `make` for `v*` tags and manual dispatch on a
+16-vCPU Blacksmith arm64 runner (`blacksmith-16vcpu-ubuntu-2404-arm`), and uploads the
+outputs as a workflow artifact. The runner needs the memory and disk listed under
+[Requirements](#requirements); GitHub's standard runners for private repositories are
+smaller. `publish.yaml` only pushes a tarball and runs on a 2-vCPU Blacksmith runner.
 
 For a tag without a release, the job runs `make release`, then `publish.yaml`. For a tag
 whose release already exists, the job compares its `OCI-DIGESTS` with the release's,
@@ -220,7 +220,6 @@ which checks that the release reproduces on that runner.
 Repository setup:
 
 - Secret `MODULE_SIGNING_KEY`: contents of `keys/module-signing.pem`.
-- Variable `BUILD_RUNNER`: runner label for the build job.
 
 ## Install
 

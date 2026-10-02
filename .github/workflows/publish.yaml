@@ -24,7 +24,7 @@ permissions:
 
 jobs:
   publish:
-    runs-on: blacksmith-16vcpu-ubuntu-2404-arm
+    runs-on: blacksmith-2vcpu-ubuntu-2404-arm
     env:
       TAG: ${{ inputs.tag || github.event.release.tag_name }}
       IMAGE: ghcr.io/${{ github.repository }}/installer
