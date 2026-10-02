@@ -4,13 +4,16 @@
 # installs them, signed, into EXTENSION_ROOTFS/usr/lib/modules/RELEASE/extras
 # together with the kernel's module metadata from KERNEL_ROOTFS.
 #
-# Usage: build-nvidia.sh DOWNLOADS KERNEL_ROOTFS EXTENSION_ROOTFS
+# Usage: build-nvidia.sh DOWNLOADS PATCHES KERNEL_ROOTFS EXTENSION_ROOTFS
 # Environment: KERNEL_RELEASE
+#
+# PATCHES/series lists patches to the driver archive, applied in order with -p1.
 set -euo pipefail
 
 downloads=$1
-kernel_rootfs=$2
-rootfs=$3
+patches=$2
+kernel_rootfs=$3
+rootfs=$4
 jobs=$(nproc)
 linux=/src/linux
 nvidia_src=/src/nvidia
@@ -20,6 +23,11 @@ modules=usr/lib/modules/${KERNEL_RELEASE}
 mkdir -p "${nvidia_src}" "${gds_src}"
 tar -xJf "${downloads}/nvidia.tar.xz" -C "${nvidia_src}" --strip-components=1 --no-same-owner
 tar -xzf "${downloads}/gds.tar.gz" -C "${gds_src}" --strip-components=1 --no-same-owner
+
+while read -r name; do
+    echo "Applying ${name}"
+    patch -d "${nvidia_src}" -p1 --batch --forward --fuzz=0 --quiet < "${patches}/${name}"
+done < "${patches}/series"
 
 # NVIDIA and GDS conftests call the compiler directly, so CC carries the target.
 cc="clang --target=aarch64-linux-musl"

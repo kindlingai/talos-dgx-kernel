@@ -72,9 +72,10 @@ FROM kernel-build AS nvidia-build
 ARG KERNEL_RELEASE
 WORKDIR /src
 RUN --mount=type=bind,source=scripts,target=/scripts \
+    --mount=type=bind,source=extension/patches,target=/patches \
     --mount=type=bind,from=downloads,target=/downloads \
     --mount=type=secret,id=module_signing_key,required=true \
-    /scripts/build-nvidia.sh /downloads /rootfs /extension/rootfs
+    /scripts/build-nvidia.sh /downloads /patches /rootfs /extension/rootfs
 COPY extension/manifest.yaml /extension/manifest.yaml
 COPY extension/nvidia.conf /extension/rootfs/usr/local/lib/modprobe.d/nvidia.conf
 COPY extension/nvidia-open-gpu-kernel-modules-lts.spdx.json /extension/rootfs/usr/local/share/spdx/nvidia-open-gpu-kernel-modules-lts.spdx.json

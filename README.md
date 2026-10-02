@@ -2,7 +2,7 @@
 
 Talos Linux **v1.14.1** for NVIDIA DGX Spark (arm64), built with:
 
-- **Linux 6.17.13-talos-dgx1022.3**: Ubuntu `linux-nvidia-6.17` 6.17.0-1022.22 plus the
+- **Linux 6.17.13-talos-dgx1022.4**: Ubuntu `linux-nvidia-6.17` 6.17.0-1022.22 plus the
   patches in `kernel/patches/series`, configured by `kernel/config` with 64 KiB pages.
 - **NVIDIA 580.178.04** open GPU kernel modules and **GPUDirect Storage 2.29.4**
   (`nvidia-fs`), packaged as the `nvidia-open-gpu-kernel-modules-lts` system extension.
@@ -29,6 +29,21 @@ as Ubuntu's `linux-modules-nvidia-580-open-*-nvidia-64k` packages do.
   such as jemalloc built with `--with-lg-page=12`, need builds for 64 KiB pages.
 - Swap areas need `mkswap` under this kernel before use.
 
+`extension/patches/` holds the driver patches, applied in `series` order:
+
+- `0001-nvidia-uvm-flush-gpu-tlb-after-hub-ats-faults.patch` (Matt Mastracci): after
+  servicing an ATS fault from a copy engine (HUB client), nvidia-uvm invalidates the GPU
+  TLB on every page size. Upstream invalidates only on 4 KiB kernels, so on 64 KiB
+  kernels a copy from pageable memory that faults on a freshly populated page faults
+  again on the stale TLB entry and stalls. libcuda triggers this: before a pageable
+  copy it populates `[align_down(start), align_down(start) + size)`, which leaves the
+  last page unpopulated when `start` is unaligned.
+
+Drivers from 590.44.01 on also need
+[NVIDIA/open-gpu-kernel-modules#1269](https://github.com/NVIDIA/open-gpu-kernel-modules/issues/1269)
+on 64 KiB kernels; 580.178.04 sizes DMA submaps for 64 KiB alignment, which 64 KiB pages
+meet.
+
 ## Versions
 
 The kernel release is `6.17.13-talos-dgx<ABI>.<revision>`:
@@ -38,7 +53,7 @@ The kernel release is `6.17.13-talos-dgx<ABI>.<revision>`:
   kernel changes: config, patches, sources, or toolchain.
 
 Releases are tagged `<Talos version>-dgx<ABI>.<revision>`, for example
-`v1.14.1-dgx1022.3`.
+`v1.14.1-dgx1022.4`.
 
 `uname -v` starts with `#<fingerprint>`: the first 12 hex digits of a SHA-256 over the files
 the kernel build reads (`Dockerfile`, `kernel/config`, `kernel/patches/`, `scripts/`). The
@@ -170,7 +185,7 @@ To check a build, run `make` again on another machine or a fresh builder
 3. Tag the commit and publish the release:
 
    ```sh
-   git tag v1.14.1-dgx1022.3 && git push origin v1.14.1-dgx1022.3
+   git tag v1.14.1-dgx1022.4 && git push origin v1.14.1-dgx1022.4
    make release
    ```
 
@@ -210,13 +225,28 @@ Repository setup:
 ## Install
 
 Reference the installer image by digest, for example
-`ghcr.io/kindlingai/talos-dgx-kernel/installer:v1.14.1-dgx1022.3@sha256:<digest>`. When
+`ghcr.io/kindlingai/talos-dgx-kernel/installer:v1.14.1-dgx1022.4@sha256:<digest>`. When
 the package is private, give nodes pull credentials through
 `machine.registries.config`.
 
-The DGX Spark LAN port uses the Realtek `r8127` driver in this kernel. Select network
-interfaces by MAC address (`deviceSelector.hardwareAddr`) so the configuration matches
-the same port under any driver.
+The LAN port gets an address by DHCP with no network configuration: Talos runs DHCPv4 on
+every physical link the machine configuration leaves unconfigured. The LAN port is the
+Realtek controller named `enP7s7` (PCI address `0007:01:00.0`), with the `r8127` driver in
+this kernel. Talos derives interface names from the bus location, so the name is the same
+on every Spark and under any driver. Configure it by name:
+
+```yaml
+machine:
+  network:
+    interfaces:
+      - interface: enP7s7
+        dhcp: true
+```
+
+`deviceSelector.busPath: "0007:01:00.0"` selects the same port independently of Talos's
+interface naming. The ConnectX-7 ports are `enp1s0f0np0`, `enp1s0f1np1`, `enP2p1s0f0np0`,
+and `enP2p1s0f1np1` (`0000:01:00.0`, `0000:01:00.1`, `0002:01:00.0`, `0002:01:00.1`) on
+every Spark.
 
 ### New machine from the ISO
 
@@ -228,7 +258,7 @@ the same port under any driver.
    machine:
      install:
        disk: /dev/nvme0n1
-       image: ghcr.io/kindlingai/talos-dgx-kernel/installer:v1.14.1-dgx1022.3@sha256:<digest>
+       image: ghcr.io/kindlingai/talos-dgx-kernel/installer:v1.14.1-dgx1022.4@sha256:<digest>
    ```
 
    `talosctl gen config ... --install-image <image>` sets the same field.
@@ -243,7 +273,7 @@ the node's configuration and a console path for recovery.
 ```sh
 export TALOSCONFIG=/secure/path/to/talosconfig
 NODE=node-address
-INSTALLER=ghcr.io/kindlingai/talos-dgx-kernel/installer:v1.14.1-dgx1022.3@sha256:<digest>
+INSTALLER=ghcr.io/kindlingai/talos-dgx-kernel/installer:v1.14.1-dgx1022.4@sha256:<digest>
 
 talosctl --nodes "$NODE" read /proc/sys/kernel/random/boot_id
 
@@ -257,7 +287,7 @@ talosctl --nodes "$NODE" get linkstatus
 talosctl --nodes "$NODE" get extensions
 ```
 
-A healthy node reports kernel `6.17.13-talos-dgx1022.3` with the release's `uname -v`
+A healthy node reports kernel `6.17.13-talos-dgx1022.4` with the release's `uname -v`
 fingerprint, a new boot ID, a working LAN link and default route, Kubernetes `Ready`, and
 working NVIDIA GPU, CDI, and CUDA workloads.
 
@@ -265,7 +295,7 @@ working NVIDIA GPU, CDI, and CUDA workloads.
 
 `talos/source.patch` adapts Talos to this kernel:
 
-- `DefaultKernelVersion` is `6.17.13-talos-dgx1022.3`, so Talos userspace looks up modules
+- `DefaultKernelVersion` is `6.17.13-talos-dgx1022.4`, so Talos userspace looks up modules
   under that release.
 - `hack/modules-arm64.txt` (the modules copied into the initramfs) adds `r8127` and
   drops six entries this kernel provides differently: `hkdf` is built in,
@@ -278,7 +308,7 @@ working NVIDIA GPU, CDI, and CUDA workloads.
 | -------------------------- | ------------------------------------------------------------------------- |
 | Kernel source or patches   | `Dockerfile` (URLs, checksums), `kernel/patches/`, `kernel/config`, `kernel/kernel.spdx.json` |
 | Kernel release (revision)  | `Makefile` (`KERNEL_RELEASE`), `kernel/config` (`CONFIG_LOCALVERSION`), `talos/source.patch`, `extension/manifest.yaml`, `dispram/manifest.yaml`, both SPDX documents |
-| NVIDIA or GDS              | `Dockerfile` (checksums, including open-gpu-kernel-modules), `docker-bake.hcl` (versions), `extension/`, `dispram/manifest.yaml` |
+| NVIDIA or GDS              | `Dockerfile` (checksums, including open-gpu-kernel-modules), `docker-bake.hcl` (versions), `extension/` (rebase `extension/patches/`), `dispram/manifest.yaml` |
 | Talos                      | `Makefile` (`TALOS_VERSION`, `TALOS_COMMIT`), `docker-bake.hcl` (arguments from Talos's Makefile, package digests), `talos/source.patch` |
 
 `kernel/config` is the full output of `make olddefconfig` for the pinned toolchain; the
