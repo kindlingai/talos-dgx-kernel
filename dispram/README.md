@@ -40,7 +40,9 @@ unchanged.
 
 ## Using it from Kubernetes
 
-Mount the socket directory into the pod and put the client on the Python path:
+Mount the socket directory into the pod and put the client on the Python path. The pod
+requests a GPU (`nvidia.com/gpu`), and its namespace needs a Pod Security level that
+admits `hostPath` volumes, such as `pod-security.kubernetes.io/enforce: privileged`:
 
 ```yaml
 volumes:
