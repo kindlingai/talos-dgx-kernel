@@ -1,8 +1,8 @@
 #!/bin/bash
-# Builds the NVIDIA proprietary driver modules and GPUDirect Storage (nvidia-fs)
-# against the kernel tree in /src/linux and installs them, signed, into
-# EXTENSION_ROOTFS/usr/lib/modules/RELEASE/extras together with the kernel's
-# module metadata from KERNEL_ROOTFS.
+# Builds the NVIDIA open GPU kernel modules (kernel-open/ in the driver archive)
+# and GPUDirect Storage (nvidia-fs) against the kernel tree in /src/linux, and
+# installs them, signed, into EXTENSION_ROOTFS/usr/lib/modules/RELEASE/extras
+# together with the kernel's module metadata from KERNEL_ROOTFS.
 #
 # Usage: build-nvidia.sh DOWNLOADS KERNEL_ROOTFS EXTENSION_ROOTFS
 # Environment: KERNEL_RELEASE
@@ -26,7 +26,7 @@ cc="clang --target=aarch64-linux-musl"
 lld="ld.lld --thinlto-jobs=${jobs} --threads=${jobs}"
 install=(INSTALL_MOD_PATH="${rootfs}/usr" INSTALL_MOD_DIR=extras INSTALL_MOD_STRIP=1 DEPMOD=true)
 
-nvidia=(make -C "${nvidia_src}/kernel" -j"${jobs}" CC="${cc}" LD="${lld}" OBJDUMP=llvm-objdump JOBS=1
+nvidia=(make -C "${nvidia_src}/kernel-open" -j"${jobs}" CC="${cc}" LD="${lld}" OBJDUMP=llvm-objdump JOBS=1
     SYSSRC="${linux}" SYSOUT="${linux}")
 "${nvidia[@]}"
 "${nvidia[@]}" modules_install "${install[@]}"
@@ -38,8 +38,8 @@ cd "${gds_src}/src"
 CC="${cc}" ./configure "${KERNEL_RELEASE}"
 gds=(make -C "${linux}" M="${gds_src}/src" -j"${jobs}" LD="${lld}" JOBS=1)
 "${gds[@]}" modules KDIR="${linux}" \
-    NVIDIA_SRC_DIR="${nvidia_src}/kernel/nvidia" \
-    KBUILD_EXTRA_SYMBOLS="${nvidia_src}/kernel/Module.symvers" \
+    NVIDIA_SRC_DIR="${nvidia_src}/kernel-open/nvidia" \
+    KBUILD_EXTRA_SYMBOLS="${nvidia_src}/kernel-open/Module.symvers" \
     KCPPFLAGS="-DCONFIG_NVFS_STATS=y -DGDS_VERSION=$(<GDS_VERSION) -DNVFS_ENABLE_KERN_RDMA_SUPPORT -DNVFS_BATCH_SUPPORT=y" \
     KCFLAGS=-Wno-strict-prototypes CONFIG_NVFS_STATS=y CONFIG_NVFS_BATCH_SUPPORT=y
 "${gds[@]}" modules_install "${install[@]}"

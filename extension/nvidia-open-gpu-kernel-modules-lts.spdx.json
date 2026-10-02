@@ -2,22 +2,22 @@
   "spdxVersion": "SPDX-2.3",
   "dataLicense": "CC0-1.0",
   "SPDXID": "SPDXRef-DOCUMENT",
-  "name": "kmod-nvidia-lts",
-  "documentNamespace": "https://github.com/kindlingai/talos-dgx-kernel/spdx/kmod-nvidia-lts-580.178.04-6.17.13-talos-dgx1022.2",
+  "name": "nvidia-open-gpu-kernel-modules-lts",
+  "documentNamespace": "https://github.com/kindlingai/talos-dgx-kernel/spdx/nvidia-open-gpu-kernel-modules-lts-580.178.04-6.17.13-talos-dgx1022.3",
   "creationInfo": {
     "creators": ["Tool: talos-dgx-kernel"],
     "created": "2026-09-15T14:07:28Z"
   },
   "packages": [
     {
-      "name": "kmod-nvidia-lts",
-      "SPDXID": "SPDXRef-Package-kmod-nvidia-lts",
+      "name": "nvidia-open-gpu-kernel-modules",
+      "SPDXID": "SPDXRef-Package-nvidia-open-gpu-kernel-modules",
       "versionInfo": "580.178.04",
       "supplier": "Organization: NVIDIA Corporation",
       "downloadLocation": "https://developer.download.nvidia.com/compute/nvidia-driver/redist/nvidia_driver/linux-sbsa/nvidia_driver-linux-sbsa-580.178.04-archive.tar.xz",
       "filesAnalyzed": false,
       "licenseConcluded": "NOASSERTION",
-      "licenseDeclared": "NOASSERTION",
+      "licenseDeclared": "MIT OR GPL-2.0-only",
       "copyrightText": "NOASSERTION"
     },
     {
@@ -35,7 +35,7 @@
   "relationships": [
     {
       "spdxElementId": "SPDXRef-DOCUMENT",
-      "relatedSpdxElement": "SPDXRef-Package-kmod-nvidia-lts",
+      "relatedSpdxElement": "SPDXRef-Package-nvidia-open-gpu-kernel-modules",
       "relationshipType": "DESCRIBES"
     },
     {

@@ -4,7 +4,7 @@
 #
 # Targets:
 #   kernel             Talos PKG_KERNEL image
-#   nvidia-extension   Talos system extension with the NVIDIA and GDS modules
+#   nvidia-extension   Talos system extension with the NVIDIA open GPU and GDS modules
 #   dispram-extension  Talos system extension running dispramd (see dispram/README.md)
 #
 # docker-bake.hcl supplies the build arguments and the module signing key.
@@ -77,7 +77,7 @@ RUN --mount=type=bind,source=scripts,target=/scripts \
     /scripts/build-nvidia.sh /downloads /rootfs /extension/rootfs
 COPY extension/manifest.yaml /extension/manifest.yaml
 COPY extension/nvidia.conf /extension/rootfs/usr/local/lib/modprobe.d/nvidia.conf
-COPY extension/kmod-nvidia-lts.spdx.json /extension/rootfs/usr/local/share/spdx/kmod-nvidia-lts.spdx.json
+COPY extension/nvidia-open-gpu-kernel-modules-lts.spdx.json /extension/rootfs/usr/local/share/spdx/nvidia-open-gpu-kernel-modules-lts.spdx.json
 RUN --mount=type=bind,source=scripts,target=/scripts \
     --mount=type=bind,from=validator,source=/extensions-validator,target=/usr/local/bin/extensions-validator \
     /scripts/check-extension.sh /rootfs /extension
