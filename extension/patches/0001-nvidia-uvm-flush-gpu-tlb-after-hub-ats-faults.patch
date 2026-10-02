@@ -1,0 +1,34 @@
+From: Matt Mastracci <matthew@mastracci.com>
+Subject: nvidia-uvm: flush the GPU TLB after servicing HUB ATS faults
+
+uvm_ats_service_faults_region() invalidates the GPU TLB after an ATS fault
+only on 4 KiB kernels, or for writes when the SMMU workaround applies. It
+assumes the GPU re-fetches an invalid PTE when the page size is larger.
+
+HUB clients (copy engines) keep the invalid entry. libcuda pre-populates
+[align_down(start), align_down(start) + size) before a pageable copy, which
+leaves the last page unpopulated when start is not page aligned. The copy
+engine faults on that page, UVM populates it, and on a 64 KiB kernel the GPU
+retries against its cached invalid entry and faults again indefinitely.
+
+Queue the invalidation for HUB faults on every page size. The non-replayable
+fault handler issues it through uvm_ats_invalidate_tlbs().
+
+--- a/kernel-open/nvidia-uvm/uvm_ats_faults.c
++++ b/kernel-open/nvidia-uvm/uvm_ats_faults.c
+@@ -561,7 +561,14 @@
+     // The second case is similar and handles missing ATS invalidations on RO ->
+     // RW transitions for all page sizes. See the uvm_ats_smmu_invalidate_tlbs()
+     // call above.
+-    if (PAGE_SIZE == UVM_PAGE_SIZE_4K || (UVM_ATS_SMMU_WAR_REQUIRED() && access_type == UVM_FAULT_ACCESS_TYPE_WRITE)) {
++    //
++    // HUB (copy engine) clients keep a cached invalid entry on every page size,
++    // so a serviced HUB fault always invalidates the GPU's TLB. Without it, a
++    // copy that faults on a page the CPU has just populated faults again on the
++    // same stale entry indefinitely on 64 KiB kernels.
++    if (PAGE_SIZE == UVM_PAGE_SIZE_4K ||
++        ats_context->client_type == UVM_FAULT_CLIENT_TYPE_HUB ||
++        (UVM_ATS_SMMU_WAR_REQUIRED() && access_type == UVM_FAULT_ACCESS_TYPE_WRITE)) {
+         flush_tlb_va_region(gpu_va_space, start, length, ats_context->client_type);
+     }
+     else {
