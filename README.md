@@ -229,9 +229,24 @@ Reference the installer image by digest, for example
 the package is private, give nodes pull credentials through
 `machine.registries.config`.
 
-The DGX Spark LAN port uses the Realtek `r8127` driver in this kernel. Select network
-interfaces by MAC address (`deviceSelector.hardwareAddr`) so the configuration matches
-the same port under any driver.
+The LAN port gets an address by DHCP with no network configuration: Talos runs DHCPv4 on
+every physical link the machine configuration leaves unconfigured. The LAN port is the
+Realtek controller named `enP7s7` (PCI address `0007:01:00.0`), with the `r8127` driver in
+this kernel. Talos derives interface names from the bus location, so the name is the same
+on every Spark and under any driver. Configure it by name:
+
+```yaml
+machine:
+  network:
+    interfaces:
+      - interface: enP7s7
+        dhcp: true
+```
+
+`deviceSelector.busPath: "0007:01:00.0"` selects the same port independently of Talos's
+interface naming. The ConnectX-7 ports are `enp1s0f0np0`, `enp1s0f1np1`, `enP2p1s0f0np0`,
+and `enP2p1s0f1np1` (`0000:01:00.0`, `0000:01:00.1`, `0002:01:00.0`, `0002:01:00.1`) on
+every Spark.
 
 ### New machine from the ISO
 
