@@ -8,7 +8,7 @@
 TALOS_VERSION     := v1.14.1
 TALOS_COMMIT      := 2f86b9d2a29b413deddd7122a8420b8913813615
 TALOS_REPOSITORY  := https://github.com/siderolabs/talos.git
-KERNEL_RELEASE    := 6.17.13-talos-dgx1022.2
+KERNEL_RELEASE    := 6.17.13-talos-dgx1022.3
 SOURCE_DATE_EPOCH := 1789481248
 
 # `uname -v` reports this hash of the files the kernel build reads, so two

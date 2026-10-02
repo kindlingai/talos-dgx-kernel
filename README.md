@@ -2,10 +2,10 @@
 
 Talos Linux **v1.14.1** for NVIDIA DGX Spark (arm64), built with:
 
-- **Linux 6.17.13-talos-dgx1022.2**: Ubuntu `linux-nvidia-6.17` 6.17.0-1022.22 plus the
+- **Linux 6.17.13-talos-dgx1022.3**: Ubuntu `linux-nvidia-6.17` 6.17.0-1022.22 plus the
   patches in `kernel/patches/series`, configured by `kernel/config` with 64 KiB pages.
-- **NVIDIA 580.178.04** proprietary kernel modules and **GPUDirect Storage 2.29.4**
-  (`nvidia-fs`), packaged as the `nonfree-kmod-nvidia-lts` system extension.
+- **NVIDIA 580.178.04** open GPU kernel modules and **GPUDirect Storage 2.29.4**
+  (`nvidia-fs`), packaged as the `nvidia-open-gpu-kernel-modules-lts` system extension.
 - **dispram**: the `dispramd` service, which lends the 2046 MiB GB10 display carveout to
   CUDA processes ([dispram/README.md](dispram/README.md)).
 - The upstream `nvidia-container-toolkit-lts` system extension.
@@ -13,7 +13,9 @@ Talos Linux **v1.14.1** for NVIDIA DGX Spark (arm64), built with:
 ## Page size
 
 The kernel uses 64 KiB pages (`CONFIG_ARM64_64K_PAGES`), the page size of Ubuntu's
-`nvidia-64k` flavour of the same source.
+`nvidia-64k` flavour of the same source. The GPU runs on NVIDIA's open kernel modules,
+built from `kernel-open/` in the driver archive; they initialize GB10 under 64 KiB pages,
+as Ubuntu's `linux-modules-nvidia-580-open-*-nvidia-64k` packages do.
 
 - Page descriptors (64 bytes per page) take 128 MiB per 128 GiB of RAM, against 2 GiB with
   4 KiB pages. Page tables have 3 levels for 48-bit virtual addresses.
@@ -36,7 +38,7 @@ The kernel release is `6.17.13-talos-dgx<ABI>.<revision>`:
   kernel changes: config, patches, sources, or toolchain.
 
 Releases are tagged `<Talos version>-dgx<ABI>.<revision>`, for example
-`v1.14.1-dgx1022.2`.
+`v1.14.1-dgx1022.3`.
 
 `uname -v` starts with `#<fingerprint>`: the first 12 hex digits of a SHA-256 over the files
 the kernel build reads (`Dockerfile`, `kernel/config`, `kernel/patches/`, `scripts/`). The
@@ -168,7 +170,7 @@ To check a build, run `make` again on another machine or a fresh builder
 3. Tag the commit and publish the release:
 
    ```sh
-   git tag v1.14.1-dgx1022.2 && git push origin v1.14.1-dgx1022.2
+   git tag v1.14.1-dgx1022.3 && git push origin v1.14.1-dgx1022.3
    make release
    ```
 
@@ -208,7 +210,7 @@ Repository setup:
 ## Install
 
 Reference the installer image by digest, for example
-`ghcr.io/kindlingai/talos-dgx-kernel/installer:v1.14.1-dgx1022.2@sha256:<digest>`. When
+`ghcr.io/kindlingai/talos-dgx-kernel/installer:v1.14.1-dgx1022.3@sha256:<digest>`. When
 the package is private, give nodes pull credentials through
 `machine.registries.config`.
 
@@ -226,7 +228,7 @@ the same port under any driver.
    machine:
      install:
        disk: /dev/nvme0n1
-       image: ghcr.io/kindlingai/talos-dgx-kernel/installer:v1.14.1-dgx1022.2@sha256:<digest>
+       image: ghcr.io/kindlingai/talos-dgx-kernel/installer:v1.14.1-dgx1022.3@sha256:<digest>
    ```
 
    `talosctl gen config ... --install-image <image>` sets the same field.
@@ -241,7 +243,7 @@ the node's configuration and a console path for recovery.
 ```sh
 export TALOSCONFIG=/secure/path/to/talosconfig
 NODE=node-address
-INSTALLER=ghcr.io/kindlingai/talos-dgx-kernel/installer:v1.14.1-dgx1022.2@sha256:<digest>
+INSTALLER=ghcr.io/kindlingai/talos-dgx-kernel/installer:v1.14.1-dgx1022.3@sha256:<digest>
 
 talosctl --nodes "$NODE" read /proc/sys/kernel/random/boot_id
 
@@ -255,7 +257,7 @@ talosctl --nodes "$NODE" get linkstatus
 talosctl --nodes "$NODE" get extensions
 ```
 
-A healthy node reports kernel `6.17.13-talos-dgx1022.2` with the release's `uname -v`
+A healthy node reports kernel `6.17.13-talos-dgx1022.3` with the release's `uname -v`
 fingerprint, a new boot ID, a working LAN link and default route, Kubernetes `Ready`, and
 working NVIDIA GPU, CDI, and CUDA workloads.
 
@@ -263,7 +265,7 @@ working NVIDIA GPU, CDI, and CUDA workloads.
 
 `talos/source.patch` adapts Talos to this kernel:
 
-- `DefaultKernelVersion` is `6.17.13-talos-dgx1022.2`, so Talos userspace looks up modules
+- `DefaultKernelVersion` is `6.17.13-talos-dgx1022.3`, so Talos userspace looks up modules
   under that release.
 - `hack/modules-arm64.txt` (the modules copied into the initramfs) adds `r8127` and
   drops six entries this kernel provides differently: `hkdf` is built in,
@@ -286,6 +288,7 @@ changes.
 ## Licenses
 
 Kernel sources and patches keep their upstream license notices (principally
-GPL-2.0-only). Talos source changes follow Talos's MPL-2.0 terms. NVIDIA proprietary
-components are under NVIDIA's license; review it and the other component licenses
-before distributing built images.
+GPL-2.0-only). Talos source changes follow Talos's MPL-2.0 terms. NVIDIA's open GPU
+kernel modules are dual-licensed MIT/GPL-2.0. The `nvidia-container-toolkit-lts`
+extension carries NVIDIA's user-space driver under NVIDIA's license; review it and the
+other component licenses before distributing built images.

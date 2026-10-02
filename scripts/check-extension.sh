@@ -25,4 +25,4 @@ cp -a "${extension}/rootfs/${modules}/extras" "${combined}/lib/modules/${KERNEL_
 "$(dirname "$0")/check-modules.sh" "${kernel_rootfs}/boot/System.map" "${combined}"
 rm -rf "${combined}"
 
-extensions-validator validate --rootfs="${extension}" --pkg-name=nonfree-kmod-nvidia-lts
+extensions-validator validate --rootfs="${extension}" --pkg-name=nvidia-open-gpu-kernel-modules-lts

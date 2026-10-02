@@ -1,7 +1,7 @@
 version: v1alpha1
 metadata:
   name: dispram
-  version: "580.178.04-v1.14.1-dgx1022.2"
+  version: "580.178.04-v1.14.1-dgx1022.3"
   author: talos-dgx-kernel
   description: |
     dispramd lends the 2046 MiB GB10 display carveout to CUDA processes through /run/dispram/dispram.sock. Built for NVIDIA 580.178.04.
