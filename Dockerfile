@@ -3,8 +3,9 @@
 # Linux kernel and NVIDIA kernel modules for Talos on NVIDIA DGX Spark (arm64).
 #
 # Targets:
-#   kernel            Talos PKG_KERNEL image
-#   nvidia-extension  Talos system extension with the NVIDIA and GDS modules
+#   kernel             Talos PKG_KERNEL image
+#   nvidia-extension   Talos system extension with the NVIDIA and GDS modules
+#   dispram-extension  Talos system extension running dispramd (see dispram/README.md)
 #
 # docker-bake.hcl supplies the build arguments and the module signing key.
 
@@ -25,6 +26,11 @@ ADD --checksum=sha256:8e55dfbe85b1aa9fbd2e323ed203470ebf6001f614d1f8cb4fa0671ea9
     https://developer.download.nvidia.com/compute/nvidia-driver/redist/nvidia_driver/linux-sbsa/nvidia_driver-linux-sbsa-${NVIDIA_VERSION}-archive.tar.xz /nvidia.tar.xz
 ADD --checksum=sha256:6936aeacfb519a1d6fe66e16281799c20ffe177c2022f831d29f90895f11e339 \
     https://codeload.github.com/NVIDIA/gds-nvidia-fs/tar.gz/refs/tags/v${GDS_VERSION} /gds.tar.gz
+
+FROM scratch AS dispram-downloads
+ARG NVIDIA_VERSION
+ADD --checksum=sha256:f30d4c20feda9f570a69084573a72423067e1e2d46c50ca58c391664872a9e01 \
+    https://codeload.github.com/NVIDIA/open-gpu-kernel-modules/tar.gz/refs/tags/${NVIDIA_VERSION} /open-gpu-kernel-modules.tar.gz
 
 FROM --platform=$BUILDPLATFORM ${LLVM_IMAGE} AS llvm
 FROM --platform=$BUILDPLATFORM ${VALIDATOR_IMAGE} AS validator
@@ -78,3 +84,19 @@ RUN --mount=type=bind,source=scripts,target=/scripts \
 
 FROM scratch AS nvidia-extension
 COPY --link --from=nvidia-build /extension/ /
+
+# dispramd runs on the node, so it builds with the target platform's musl toolchain.
+FROM ${TOOLS_IMAGE} AS dispram-build
+ARG NVIDIA_VERSION
+RUN --mount=type=bind,source=scripts,target=/scripts \
+    --mount=type=bind,source=dispram,target=/dispram \
+    --mount=type=bind,from=dispram-downloads,target=/downloads \
+    /scripts/build-dispram.sh /downloads /dispram /extension
+
+FROM toolchain AS dispram-check
+COPY --from=dispram-build /extension/ /extension/
+RUN --mount=type=bind,from=validator,source=/extensions-validator,target=/usr/local/bin/extensions-validator \
+    extensions-validator validate --rootfs=/extension --pkg-name=dispram
+
+FROM scratch AS dispram-extension
+COPY --link --from=dispram-check /extension/ /

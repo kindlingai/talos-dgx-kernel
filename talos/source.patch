@@ -1,17 +1,8 @@
---- a/pkg/machinery/constants/constants.go
-+++ b/pkg/machinery/constants/constants.go
-@@ -20,7 +20,7 @@
- 
- const (
- 	// DefaultKernelVersion is the default Linux kernel version.
--	DefaultKernelVersion = "6.18.51-talos"
-+	DefaultKernelVersion = "6.17.13-talos-dgx1022.1"
- 
- 	// KernelParamConfig is the kernel parameter name for specifying the URL.
- 	// to the config.
+diff --git a/hack/modules-arm64.txt b/hack/modules-arm64.txt
+index 35656fe..3a82ba1 100644
 --- a/hack/modules-arm64.txt
 +++ b/hack/modules-arm64.txt
-@@ -4,7 +4,6 @@
+@@ -4,7 +4,6 @@ kernel/crypto/async_tx/async_pq.ko
  kernel/crypto/async_tx/async_raid6_recov.ko
  kernel/crypto/async_tx/async_tx.ko
  kernel/crypto/async_tx/async_xor.ko
@@ -19,7 +10,7 @@
  kernel/crypto/xor.ko
  kernel/drivers/acpi/ac.ko
  kernel/drivers/acpi/battery.ko
-@@ -155,10 +154,8 @@
+@@ -155,10 +154,8 @@ kernel/drivers/net/ethernet/intel/igc/igc.ko
  kernel/drivers/net/ethernet/intel/ixgbe/ixgbe.ko
  kernel/drivers/net/ethernet/intel/ixgbevf/ixgbevf.ko
  kernel/drivers/net/ethernet/intel/libeth/libeth.ko
@@ -30,7 +21,7 @@
  kernel/drivers/net/ethernet/marvell/sky2.ko
  kernel/drivers/net/ethernet/mellanox/mlx4/mlx4_core.ko
  kernel/drivers/net/ethernet/mellanox/mlx4/mlx4_en.ko
-@@ -173,6 +170,7 @@
+@@ -173,6 +170,7 @@ kernel/drivers/net/ethernet/qlogic/qed/qed.ko
  kernel/drivers/net/ethernet/qlogic/qede/qede.ko
  kernel/drivers/net/ethernet/qlogic/qlcnic/qlcnic.ko
  kernel/drivers/net/ethernet/realtek/8139too.ko
@@ -38,7 +29,7 @@
  kernel/drivers/net/ethernet/realtek/r8169.ko
  kernel/drivers/net/ethernet/sfc/sfc.ko
  kernel/drivers/net/ethernet/sfc/siena/sfc-siena.ko
-@@ -185,7 +183,6 @@
+@@ -185,7 +183,6 @@ kernel/drivers/net/ethernet/stmicro/stmmac/dwmac-meson8b.ko
  kernel/drivers/net/ethernet/stmicro/stmmac/dwmac-qcom-ethqos.ko
  kernel/drivers/net/ethernet/stmicro/stmmac/dwmac-renesas-gbeth.ko
  kernel/drivers/net/ethernet/stmicro/stmmac/dwmac-rk.ko
@@ -46,7 +37,7 @@
  kernel/drivers/net/ethernet/stmicro/stmmac/dwmac-sun8i.ko
  kernel/drivers/net/ethernet/stmicro/stmmac/dwmac-sunxi.ko
  kernel/drivers/net/ethernet/stmicro/stmmac/dwmac-tegra.ko
-@@ -196,7 +193,6 @@
+@@ -196,13 +193,11 @@ kernel/drivers/net/hyperv/hv_netvsc.ko
  kernel/drivers/net/ifb.ko
  kernel/drivers/net/mdio.ko
  kernel/drivers/net/mdio/mdio-i2c.ko
@@ -54,3 +45,22 @@
  kernel/drivers/net/pcs/pcs_xpcs.ko
  kernel/drivers/net/phy/dp83867.ko
  kernel/drivers/net/phy/sfp.ko
+ kernel/drivers/net/usb/r8152.ko
+ kernel/drivers/net/virtio_net.ko
+-kernel/drivers/net/vmxnet3/vmxnet3.ko
+ kernel/drivers/net/vrf.ko
+ kernel/drivers/net/xen-netfront.ko
+ kernel/drivers/nvme/common/nvme-auth.ko
+diff --git a/pkg/machinery/constants/constants.go b/pkg/machinery/constants/constants.go
+index 8df7a5a..41e2bff 100644
+--- a/pkg/machinery/constants/constants.go
++++ b/pkg/machinery/constants/constants.go
+@@ -20,7 +20,7 @@ var SupportedArchitectures = []string{
+ 
+ const (
+ 	// DefaultKernelVersion is the default Linux kernel version.
+-	DefaultKernelVersion = "6.18.51-talos"
++	DefaultKernelVersion = "6.17.13-talos-dgx1022.2"
+ 
+ 	// KernelParamConfig is the kernel parameter name for specifying the URL.
+ 	// to the config.

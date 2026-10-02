@@ -1,0 +1,28 @@
+# Talos extension service: dispramd lends the GB10 display carveout to CUDA
+# processes through /run/dispram/dispram.sock. Talos runs extension services with
+# all capabilities and device access; dispramd opens /dev/nvidiactl and /dev/nvidia0.
+name: dispramd
+container:
+  entrypoint: /dispramd
+  mounts:
+    # NVIDIA device nodes, created by udev when the driver loads
+    - source: /dev
+      destination: /dev
+      type: bind
+      options:
+        - rshared
+        - rbind
+        - rw
+    # socket directory shared with workloads
+    - source: /run/dispram
+      destination: /run/dispram
+      type: bind
+      options:
+        - rshared
+        - rbind
+        - rw
+depends:
+  # nvidia-container-toolkit-lts starts this service once the driver is bound and
+  # its device nodes exist.
+  - service: ext-nvidia-persistenced
+restart: always

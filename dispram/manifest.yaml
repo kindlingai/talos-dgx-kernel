@@ -1,10 +1,10 @@
 version: v1alpha1
 metadata:
-  name: nonfree-kmod-nvidia-lts
+  name: dispram
   version: "580.178.04-v1.14.1-dgx1022.2"
   author: talos-dgx-kernel
   description: |
-    NVIDIA 580.178.04 proprietary kernel modules and GPUDirect Storage 2.29.4 for Linux 6.17.13-talos-dgx1022.2.
+    dispramd lends the 2046 MiB GB10 display carveout to CUDA processes through /run/dispram/dispram.sock. Built for NVIDIA 580.178.04.
   compatibility:
     talos:
       version: ">= v1.5.0"
