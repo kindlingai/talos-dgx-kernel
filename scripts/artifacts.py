@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Record and verify the exact .6 artifact matrix (stdlib only; no private keys)."""
+"""Record and verify the exact .7 artifact matrix (stdlib only; no private keys)."""
 import hashlib
 import json
 import os
@@ -9,7 +9,7 @@ import subprocess
 import sys
 
 ROOT = Path(__file__).resolve().parents[1]
-TAG = "v1.14.1-dgx1022.6"
+TAG = "v1.14.1-dgx1022.7"
 VARIANTS = ("proprietary-4k", "open-4k", "open-64k")
 PATCHES = ("0001-nvidia-uvm-flush-gpu-tlb-after-hub-ats-faults.patch",
            "0002-nvidia-uvm-pack-user-leaf-page-tables.patch")
@@ -62,7 +62,7 @@ def shared_identity(out, variant):
     fingerprint = subprocess.check_output([sys.executable, str(ROOT / "scripts/kernel-fingerprint.py"), "kernel/config-" + page], text=True).strip()
     return {
         "page_size": page,
-        "kernel_release": "6.17.13-talos-dgx1022.6-" + page,
+        "kernel_release": "6.17.13-talos-dgx1022.7-" + page,
         "kernel_build_fingerprint": fingerprint,
         "kernel_config_sha256": sha(ROOT / ("kernel/config-" + page)),
         "module_signing_certificate_sha256": certificate,
@@ -105,7 +105,7 @@ def validate_records(records):
         driver, page = variant.split("-")
         require(record["tag"] == TAG, "Wrong release tag")
         require(record["driver"] == driver and record["page_size"] == page, "Wrong driver/page mapping")
-        require(record["kernel_release"] == "6.17.13-talos-dgx1022.6-" + page, "Wrong kernel release")
+        require(record["kernel_release"] == "6.17.13-talos-dgx1022.7-" + page, "Wrong kernel release")
         require(record["talos_version"] == "v1.14.1" and record["talos_commit"] == TALOS_COMMIT, "Wrong Talos pin")
         require(record["nvidia_version"] == "580.178.04" and record["gds_version"] == "2.29.4", "Wrong driver pins")
         require(record["driver_source_directory"] == ("kernel-open" if driver == "open" else "kernel"), "Wrong driver source")

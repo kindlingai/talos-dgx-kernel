@@ -1,7 +1,7 @@
 version: v1alpha1
 metadata:
   name: nvidia-container-toolkit-lts
-  version: "580.178.04-v1.19.1-dgx1022.6"
+  version: "580.178.04-v1.19.1-dgx1022.7"
   author: talos-dgx-kernel
   description: |
     Sidero Labs nvidia-container-toolkit-lts 580.178.04-v1.19.1, with nvidia-persistenced

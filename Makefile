@@ -1,4 +1,4 @@
-# Build every supported .6 installer sequentially; Linux is built once per page size.
+# Build every supported .7 installer sequentially; Linux is built once per page size.
 SHELL := /bin/bash
 .DEFAULT_GOAL := all
 .NOTPARALLEL:
@@ -7,9 +7,9 @@ TALOS_VERSION     := v1.14.1
 TALOS_COMMIT      := 2f86b9d2a29b413deddd7122a8420b8913813615
 TALOS_REPOSITORY  := https://github.com/siderolabs/talos.git
 SOURCE_DATE_EPOCH := 1789481248
-TAG               := v1.14.1-dgx1022.6
-ifneq ($(TAG),v1.14.1-dgx1022.6)
-$(error This branch only publishes TAG=v1.14.1-dgx1022.6)
+TAG               := v1.14.1-dgx1022.7
+ifneq ($(TAG),v1.14.1-dgx1022.7)
+$(error This branch only publishes TAG=v1.14.1-dgx1022.7)
 endif
 VARIANTS          := proprietary-4k open-4k open-64k
 VARIANT           ?= open-64k
@@ -18,12 +18,12 @@ $(error Unsupported VARIANT=$(VARIANT); choose $(VARIANTS))
 endif
 DRIVER_FLAVOR     := $(firstword $(subst -, ,$(VARIANT)))
 KERNEL_PAGE_SIZE  := $(lastword $(subst -, ,$(VARIANT)))
-KERNEL_RELEASE    := 6.17.13-talos-dgx1022.6-$(KERNEL_PAGE_SIZE)
+KERNEL_RELEASE    := 6.17.13-talos-dgx1022.7-$(KERNEL_PAGE_SIZE)
 KERNEL_CONFIG     := kernel/config-$(KERNEL_PAGE_SIZE)
 ifneq ($(DRIVER_FLAVOR)-$(KERNEL_PAGE_SIZE),$(VARIANT))
 $(error DRIVER_FLAVOR/KERNEL_PAGE_SIZE contradict VARIANT)
 endif
-ifneq ($(KERNEL_RELEASE),6.17.13-talos-dgx1022.6-$(KERNEL_PAGE_SIZE))
+ifneq ($(KERNEL_RELEASE),6.17.13-talos-dgx1022.7-$(KERNEL_PAGE_SIZE))
 $(error KERNEL_RELEASE contradicts page geometry)
 endif
 ifneq ($(KERNEL_CONFIG),kernel/config-$(KERNEL_PAGE_SIZE))

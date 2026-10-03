@@ -3,7 +3,7 @@
   "dataLicense": "CC0-1.0",
   "SPDXID": "SPDXRef-DOCUMENT",
   "name": "nvidia-open-gpu-kernel-modules-lts",
-  "documentNamespace": "https://github.com/kindlingai/talos-dgx-kernel/spdx/nvidia-open-gpu-kernel-modules-lts-580.178.04-6.17.13-talos-dgx1022.6-64k",
+  "documentNamespace": "https://github.com/kindlingai/talos-dgx-kernel/spdx/nvidia-open-gpu-kernel-modules-lts-580.178.04-6.17.13-talos-dgx1022.7-64k",
   "creationInfo": {
     "creators": [
       "Tool: talos-dgx-kernel"

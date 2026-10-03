@@ -1,23 +1,25 @@
 # Talos DGX kernel
 
-Talos **v1.14.1** for NVIDIA DGX Spark (arm64), release **v1.14.1-dgx1022.6**.
+Talos **v1.14.1** for NVIDIA DGX Spark (arm64), release **v1.14.1-dgx1022.7**.
 Linux sources remain Ubuntu `linux-nvidia-6.17` 6.17.0-1022.22 plus the pinned
 `kernel/patches/series`. NVIDIA stays **580.178.04** and GPUDirect Storage stays
 **2.29.4**. The toolchain, security config, BTF, and signing checks remain enabled.
+`.7` keeps `.6`'s kernel and driver inputs. It changes only the release string and
+fixes nvidia-persistenced and nvidia-cdi-gen startup (see below).
 
 ## Installer choices
 
 | Variant | CPU pages | Kernel release | NVIDIA source |
 | --- | --- | --- | --- |
-| `proprietary-4k` | 4 KiB | `6.17.13-talos-dgx1022.6-4k` | archive `kernel/` |
-| `open-4k` | 4 KiB | `6.17.13-talos-dgx1022.6-4k` | archive `kernel-open/` |
-| `open-64k` | 64 KiB | `6.17.13-talos-dgx1022.6-64k` | archive `kernel-open/` |
+| `proprietary-4k` | 4 KiB | `6.17.13-talos-dgx1022.7-4k` | archive `kernel/` |
+| `open-4k` | 4 KiB | `6.17.13-talos-dgx1022.7-4k` | archive `kernel-open/` |
+| `open-64k` | 64 KiB | `6.17.13-talos-dgx1022.7-64k` | archive `kernel-open/` |
 
 The two 4 KiB installers share the **same built kernel**, Talos installer base,
 and imager. Only their NVIDIA/GDS extension differs. The 64 KiB kernel is built
 separately, once. Driver and page size are installer-time choices, not a runtime
 page-size switch. `proprietary-64k` is rejected by Make, Bake, and the module script.
-There is no packing-off build variant and no unsuffixed `.6` image alias.
+There is no packing-off build variant and no unsuffixed `.7` image alias.
 
 Both open variants apply the same two patches in the same order:
 
@@ -59,9 +61,9 @@ Runtime behavior of newly built variants still needs separate boot/CUDA validati
 ## Kernel config policy
 
 - `kernel/config-4k` is the `.1` tag's full config, with only `CONFIG_LOCALVERSION`
-  changed to `-talos-dgx1022.6-4k`.
+  changed to `-talos-dgx1022.7-4k`.
 - `kernel/config-64k` is the `.5` full config, with only `CONFIG_LOCALVERSION`
-  changed to `-talos-dgx1022.6-64k`.
+  changed to `-talos-dgx1022.7-64k`.
 - The page configs retain their existing dependent page geometry and Kconfig
   availability differences. These include page shifts, page-table levels,
   address randomization limits, huge-page sharing/swap features, and drivers
@@ -190,7 +192,7 @@ Local OCI layouts are kept separately:
 `uname -v` begins with the kernel input fingerprint. The hash covers the selected
 config, kernel patches, marked Linux Dockerfile stages/frontend pin, and kernel
 scripts. It excludes module and installer packaging. Kernel releases explicitly
-end in `-4k` or `-64k`; the release tag is explicitly `v1.14.1-dgx1022.6`, never
+end in `-4k` or `-64k`; the release tag is explicitly `v1.14.1-dgx1022.7`, never
 derived from the final kernel-release component.
 
 The pinned inputs and `SOURCE_DATE_EPOCH` are unchanged. As before, the Talos
@@ -202,7 +204,7 @@ for reproducibility. Existing releases are not replaced by newly timed tarballs.
 
 - Manual **branch** dispatch of `build.yaml` builds all choices and uploads the
   nine release assets. It does **not** publish.
-- Pushing the explicit `.6` version tag starts the same build, creates a GitHub
+- Pushing the explicit `.7` version tag starts the same build, creates a GitHub
   release if absent, and calls `publish.yaml` once. The tag need not be on `main`.
 - If the release already exists, CI compares its `OCI-DIGESTS` and uses the
   existing release artifacts. It does not overwrite them.
@@ -218,12 +220,12 @@ for reproducibility. Existing releases are not replaced by newly timed tarballs.
 The image tags are:
 
 ```text
-ghcr.io/kindlingai/talos-dgx-kernel/installer:v1.14.1-dgx1022.6-proprietary-4k
-ghcr.io/kindlingai/talos-dgx-kernel/installer:v1.14.1-dgx1022.6-open-4k
-ghcr.io/kindlingai/talos-dgx-kernel/installer:v1.14.1-dgx1022.6-open-64k
+ghcr.io/kindlingai/talos-dgx-kernel/installer:v1.14.1-dgx1022.7-proprietary-4k
+ghcr.io/kindlingai/talos-dgx-kernel/installer:v1.14.1-dgx1022.7-open-4k
+ghcr.io/kindlingai/talos-dgx-kernel/installer:v1.14.1-dgx1022.7-open-64k
 ```
 
-There is **no unsuffixed alias**. Existing `.5` tags are outside this branch's
+There is **no unsuffixed alias**. Existing `.5` and `.6` tags are outside this branch's
 publication scope. `make release` requires an existing Git tag and refuses to
 replace a release. `make push IMAGE=<registry/repository>` applies the same
 three suffixes and no-overwrite checks. It requires registry authentication.
@@ -237,7 +239,7 @@ Choose the matching ISO or installer tag, then pin the published image digest in
 ```yaml
 machine:
   install:
-    image: ghcr.io/kindlingai/talos-dgx-kernel/installer:v1.14.1-dgx1022.6-open-64k@sha256:<published-digest>
+    image: ghcr.io/kindlingai/talos-dgx-kernel/installer:v1.14.1-dgx1022.7-open-64k@sha256:<published-digest>
 ```
 
 When packages are private, configure `machine.registries.config` credentials.

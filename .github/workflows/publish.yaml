@@ -10,7 +10,7 @@ on:
   workflow_dispatch:
     inputs:
       tag:
-        description: Existing .6 release tag
+        description: Existing .7 release tag
         type: string
         required: true
 
@@ -32,7 +32,7 @@ jobs:
       GH_REPO: ${{ github.repository }}
     steps:
       - name: Validate publication scope
-        run: test "${TAG}" = v1.14.1-dgx1022.6
+        run: test "${TAG}" = v1.14.1-dgx1022.7
 
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
