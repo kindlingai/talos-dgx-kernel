@@ -6,10 +6,12 @@
 #   kernel             Talos PKG_KERNEL image
 #   nvidia-extension   Talos system extension with selected NVIDIA GPU and GDS modules
 #   dispram-extension  Talos system extension running dispramd (see dispram/README.md)
+#   toolkit-extension  Sidero Labs nvidia-container-toolkit-lts with fixed service startup
 #
 # docker-bake.hcl supplies the build arguments and the module signing key.
 
 ARG VALIDATOR_IMAGE=ghcr.io/siderolabs/extensions-validator@sha256:3737c0e2f22e66382bddcdaab61e305eae453913ad3ba9b6096e96647daae800
+ARG TOOLKIT_IMAGE=ghcr.io/siderolabs/nvidia-container-toolkit-lts@sha256:0ad95abe15402c9bcd21600079c46f2f14263cf469d1a5385d29417ddf03d001
 
 # BEGIN KERNEL INPUTS
 ARG LLVM_IMAGE=ghcr.io/siderolabs/llvm@sha256:251882062d6ce367b3125bf50e64db69e42e09ddc03003d4a37b75c482f46496
@@ -129,3 +131,20 @@ RUN --mount=type=bind,from=validator,source=/extensions-validator,target=/usr/lo
 
 FROM scratch AS dispram-extension
 COPY --link --from=dispram-check /extension/ /
+
+FROM ${TOOLKIT_IMAGE} AS toolkit-upstream
+
+# The wrapper runs on the node, so it builds with the target platform's musl toolchain.
+FROM ${TOOLS_IMAGE} AS toolkit-build
+RUN --mount=type=bind,source=scripts/build-toolkit.sh,target=/scripts/build-toolkit.sh \
+    --mount=type=bind,source=toolkit,target=/toolkit \
+    --mount=type=bind,from=toolkit-upstream,target=/upstream \
+    /scripts/build-toolkit.sh /upstream /toolkit /extension
+
+FROM toolchain AS toolkit-check
+COPY --from=toolkit-build /extension/ /extension/
+RUN --mount=type=bind,from=validator,source=/extensions-validator,target=/usr/local/bin/extensions-validator \
+    extensions-validator validate --rootfs=/extension --pkg-name=nvidia-container-toolkit-lts
+
+FROM scratch AS toolkit-extension
+COPY --link --from=toolkit-check /extension/ /

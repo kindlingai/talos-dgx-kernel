@@ -54,11 +54,12 @@ BAKE := docker buildx bake --builder $(BUILDER) --progress $(PROGRESS) --allow f
 IMAGER_RUN := docker run --rm -i --env SOURCE_DATE_EPOCH \
 	--volume $(OUT)/oci:/oci:ro --volume $(VARIANT_OUT):/out $(IMAGER) - --output /out
 
-.PHONY: all variant package builder signing-key check-signing-key kernel dispram talos-source talos installer iso push release test cache-usage print-variant verify
+.PHONY: all variant package builder signing-key check-signing-key kernel dispram toolkit talos-source talos installer iso push release test cache-usage print-variant verify
 
 # Intentionally ordered even under make -j: no dual 16-worker Linux compiles.
 all:
 	$(MAKE) dispram
+	$(MAKE) toolkit
 	$(MAKE) talos VARIANT=open-4k
 	$(MAKE) package VARIANT=proprietary-4k
 	$(MAKE) package VARIANT=open-4k
@@ -68,7 +69,7 @@ all:
 	$(MAKE) verify
 
 # Optional bounded single-variant build. `make` remains the full release matrix.
-variant: dispram talos
+variant: dispram toolkit talos
 	$(MAKE) package VARIANT=$(VARIANT)
 
 builder:
@@ -93,6 +94,9 @@ kernel: check-signing-key builder
 
 dispram: builder
 	$(BAKE) dispram-extension
+
+toolkit: builder
+	$(BAKE) toolkit-extension
 
 talos-source: $(TALOS_SRC)/.git/talos-dgx-kernel-$(TALOS_COMMIT)-$(KERNEL_RELEASE)
 $(TALOS_SRC)/.git/talos-dgx-kernel-$(TALOS_COMMIT)-$(KERNEL_RELEASE): talos/source.patch scripts/prepare-talos.py

@@ -1,0 +1,10 @@
+--- a/usr/local/etc/containers/nvidia-cdi-gen.yaml
++++ b/usr/local/etc/containers/nvidia-cdi-gen.yaml
+@@ -82,4 +82,7 @@
+         - rw
+ depends:
+   - service: ext-nvidia-persistenced
++  # nvidia-persistenced creates its socket only after it has initialized, and
++  # removes /var/run/nvidia-persistenced, the mount source above, on failure.
++  - path: /run/nvidia-persistenced/socket
+ restart: untilSuccess

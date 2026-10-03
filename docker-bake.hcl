@@ -106,6 +106,15 @@ target "dispram-extension" {
   output   = ["type=oci,tar=false,rewrite-timestamp=true,dest=${OUT}/oci/common/dispram-extension"]
 }
 
+target "toolkit-extension" {
+  inherits   = ["_reproducible"]
+  context    = "."
+  dockerfile = "Dockerfile"
+  platforms  = ["linux/arm64"]
+  target     = "toolkit-extension"
+  output     = ["type=oci,tar=false,rewrite-timestamp=true,dest=${OUT}/oci/common/toolkit-extension"]
+}
+
 # Talos's own Dockerfile, built with the arguments its Makefile passes at
 # TALOS_COMMIT, package images pinned by digest, and PKG_KERNEL replaced by the
 # kernel OCI layout.

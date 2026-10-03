@@ -93,6 +93,7 @@ def record_variant(out, variant):
                   patches={name: sha(ROOT / "extension/patches" / name) for name in patches},
                   nvidia_oci_digest=oci_digest(out, "variants/" + variant + "/nvidia-extension"),
                   dispram_oci_digest=oci_digest(out, "common/dispram-extension"),
+                  toolkit_oci_digest=oci_digest(out, "common/toolkit-extension"),
                   artifacts={name: sha(out / name) for name in artifact_names(variant)})
     save(out / "variants" / variant / "provenance.json", record)
 
@@ -120,7 +121,7 @@ def validate_records(records):
         require(records[0][field] == records[1][field], "4 KiB variants did not share " + field)
     require(records[1]["kernel_oci_digest"] != records[2]["kernel_oci_digest"], "Kernel geometries collided")
     require(records[1]["patches"] == records[2]["patches"], "Open variants use different patches")
-    for field in ("module_signing_certificate_sha256", "source_commit", "dispram_oci_digest"):
+    for field in ("module_signing_certificate_sha256", "source_commit", "dispram_oci_digest", "toolkit_oci_digest"):
         require(len({r[field] for r in records}) == 1, "Variants differ in " + field)
 
 
@@ -132,6 +133,7 @@ def oci_lines(records):
         digests["talos/" + page + "/installer-base"] = r["installer_base_oci_digest"]
         digests["variants/" + variant + "/nvidia-extension"] = r["nvidia_oci_digest"]
         digests["common/dispram-extension"] = r["dispram_oci_digest"]
+        digests["common/toolkit-extension"] = r["toolkit_oci_digest"]
     return "".join(f"{digest}  {name}\n" for name, digest in sorted(digests.items()))
 
 

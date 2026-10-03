@@ -36,8 +36,25 @@ Each extension builds GDS against the matching driver's `Module.symvers` and
 headers. Open extensions use `nvidia-open-gpu-kernel-modules-lts`; proprietary
 uses `nvidia-gpu-kernel-modules-lts`. Manifests and SPDX documents name the variant.
 All installers also include the same [dispram service](dispram/README.md) and
-pinned upstream `nvidia-container-toolkit-lts` extension. Runtime behavior of
-newly built variants still needs separate boot/CUDA validation.
+`nvidia-container-toolkit-lts` extension. The toolkit extension is the pinned Sidero
+Labs image with two startup fixes, built from `toolkit/`:
+
+- **nvidia-persistenced waits for the driver and is restarted when it fails.**
+  Talos starts the service when `/sys/bus/pci/drivers/nvidia` appears. That happens
+  partway through `nvidia_init_module()`, seconds before the driver registers
+  `/dev/nvidiactl`. Started that early, nvidia-persistenced fails to initialize and
+  removes `/run/nvidia-persistenced`. The upstream wrapper still never exits, so
+  `restart: always` never retries. `toolkit/nvidia-persistenced-wrapper.c` waits for
+  `nvidiactl` in `/proc/devices`, which the driver registers last. It then
+  supervises the daemon and exits non-zero if the daemon fails or dies.
+  Gating on `/dev/nvidiactl` would not work, because the upstream udev rule creates
+  the node as soon as the PCI driver directory appears.
+- **nvidia-cdi-gen waits for `/run/nvidia-persistenced/socket`.** It bind-mounts
+  the nvidia-persistenced state directory, so it previously failed with "no such
+  file or directory" on boots where nvidia-persistenced had not initialized. Then
+  Kubernetes never saw the GPU.
+
+Runtime behavior of newly built variants still needs separate boot/CUDA validation.
 
 ## Kernel config policy
 
@@ -84,7 +101,7 @@ into a layer, compiler cache, or uploaded artifact. `CONFIG_MODULE_SIG_KEY` stay
 
 `make` runs these stages in order, even under `make -j`:
 
-1. Build the common dispram extension.
+1. Build the common dispram and nvidia-container-toolkit-lts extensions.
 2. Build/export the 4 KiB kernel and its Talos installer base/imager.
 3. Package the proprietary 4 KiB extension, installer, and ISO.
 4. Package the open 4 KiB extension, installer, and ISO using the same kernel export.
@@ -168,6 +185,7 @@ Local OCI layouts are kept separately:
 - `_out/oci/talos/{4k,64k}/installer-base`
 - `_out/oci/variants/<variant>/nvidia-extension`
 - `_out/oci/common/dispram-extension`
+- `_out/oci/common/toolkit-extension`
 
 `uname -v` begins with the kernel input fingerprint. The hash covers the selected
 config, kernel patches, marked Linux Dockerfile stages/frontend pin, and kernel
