@@ -39,9 +39,15 @@ jobs:
       # The action has no builder-name output. It selects the persisted builder.
       - name: Select and inspect persisted builder
         run: |
-          builder=$(docker buildx inspect --format '{{.Name}}')
-          test "$(docker buildx inspect --format '{{.Driver}}')" = remote
-          [[ "${builder}" == blacksmith-* ]]
+          builder=$(docker buildx inspect | python3 -c '
+          import re, sys
+          info = sys.stdin.read()
+          name = re.search(r"^Name:\s+(\S+)", info, re.M)
+          driver = re.search(r"^Driver:\s+(\S+)", info, re.M)
+          if not name or not driver or driver[1] != "remote" or not name[1].startswith("blacksmith-"):
+              sys.exit("Required persisted Blacksmith remote builder not selected")
+          print(name[1])
+          ')
           test "$(findmnt -n -o TARGET --target /var/lib/buildkit)" = /var/lib/buildkit
           echo "BUILDER=${builder}" >> "${GITHUB_ENV}"
           echo "REQUIRE_EXISTING_BUILDER=true" >> "${GITHUB_ENV}"

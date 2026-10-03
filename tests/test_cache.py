@@ -97,6 +97,23 @@ class CacheContract(unittest.TestCase):
         self.assertIn("max-parallelism: 1", ci)
         self.assertNotIn("docker/setup-buildx-action", ci)
 
+    def test_ci_builder_selection_uses_supported_inspect_output(self):
+        ci = (ROOT / ".github/workflows/build.yaml").read_text()
+        self.assertNotIn("buildx inspect --format", ci)
+        command = ci.split("builder=$(", 1)[1].split("          ')\n", 1)[0] + "'"
+        command = "\n".join(line.removeprefix("          ") for line in command.splitlines())
+        with tempfile.TemporaryDirectory() as temp:
+            executable = Path(temp) / "docker"
+            executable.write_text('#!/bin/sh\nprintf "%s\\n" "$TEST_BUILDER_INFO"\n')
+            executable.chmod(0o755)
+            env = dict(os.environ, PATH=temp + os.pathsep + os.environ["PATH"])
+            for info, valid in (("Name: blacksmith-test\nDriver: remote\n", True), ("Name: default\nDriver: docker\n", False), ("Name: blacksmith-test\nDriver: docker-container\n", False), ("", False)):
+                env["TEST_BUILDER_INFO"] = info
+                result = subprocess.run(["bash", "-o", "pipefail", "-c", command], env=env, capture_output=True, text=True)
+                self.assertEqual(result.returncode == 0, valid, result.stderr)
+                if valid:
+                    self.assertEqual(result.stdout.strip(), "blacksmith-test")
+
     def test_shell_syntax(self):
         for script in sorted((ROOT / "scripts").glob("*.sh")):
             subprocess.run(["bash", "-n", str(script)], check=True)
