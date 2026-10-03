@@ -76,9 +76,10 @@ Releases are tagged `<Talos version>-dgx<ABI>.<revision>`, for example
 `v1.14.1-dgx1022.5`.
 
 `uname -v` starts with `#<fingerprint>`: the first 12 hex digits of a SHA-256 over the files
-the kernel build reads (`Dockerfile`, `kernel/config`, `kernel/patches/`, `scripts/`). The
-`Makefile` computes it from the file contents, so any change to those files gives a new
-fingerprint, and identical files give the same one on every machine.
+the Linux compilation stages read: the marked kernel section of `Dockerfile`, its
+frontend pin, `kernel/config`, `kernel/patches/`, and the kernel scripts listed in
+`scripts/kernel-fingerprint.py`. Module, extension, and imager changes do not change
+this fingerprint or invalidate Linux compilation.
 
 ## Outputs
 
@@ -143,7 +144,7 @@ Builds run natively on amd64 and arm64 hosts; the kernel always targets arm64.
 
 - Docker Engine or Docker Desktop with buildx. `make` creates a `docker-container`
   builder named `talos-dgx-kernel` running the pinned BuildKit version.
-- GNU Make, Git, and OpenSSL. `crane` for `make push`, `gh` for `make release`.
+- GNU Make, Git, OpenSSL, and Python 3. `crane` for `make push`, `gh` for `make release`.
 - Memory and disk for the kernel build. The build uses every CPU the builder has. A
   builder with 12 CPUs and 24 GiB of memory builds it; 8 GiB runs out of memory while
   generating BTF. BuildKit state for one build takes about 30 GiB of disk.
@@ -174,6 +175,32 @@ make            # kernel, extension, Talos images, installer, ISO, SHA256SUMS, O
 Individual steps: `make kernel`, `make talos`, `make installer`, `make iso`. BuildKit
 caches every stage, so repeated runs rebuild only what changed. `make clean` removes
 `_out/` and the Talos checkout in `.work/`.
+
+### Persistent compiler reuse
+
+CI uses the pinned Blacksmith `setup-docker-builder` action with the stable
+`talos-dgx-arm64-buildkit-v1` cache key and `nofallback: true`. Make receives the
+selected **remote** builder name and refuses to create a substitute builder.
+Blacksmith persists both layer state and cache mounts after successful jobs.
+The first run is cold; failed jobs do not commit new cache state.
+
+The immutable `kernel-build` layer keeps the complete compiled Kbuild tree,
+including `Module.symvers`, for subsequent extension builds. Module-only edits
+reuse that exact tree. A shared writable Kbuild tree is deliberately not mounted:
+stale generated headers, source timestamps, and signing state must not cross inputs.
+When Linux inputs change, the stage rebuilds; LLVM's content-addressed ThinLTO
+cache can reuse work, partitioned by target architecture, page geometry, and
+pinned LLVM/tools identity. No private key enters either cache.
+
+Only the public certificate's DER SHA-256 enters signed-stage cache keys.
+Build scripts verify it against the secret and check the key/certificate pair.
+Rotation therefore invalidates signed layers. Existing config equality, BTF,
+SHA-512 signature, vermagic, symbol-resolution, and extension checks remain enabled.
+
+CI prints builder identity and cache usage before/after each build. Plain logs
+show cached Linux stages, and uncached runs report ThinLTO cache sizes. Run
+`make test` for offline contracts, or `make cache-usage BUILDER=<name>` for usage.
+Cache configuration is not a measured speedup: verify warm-run stage timings in CI.
 
 ### Reproducibility
 

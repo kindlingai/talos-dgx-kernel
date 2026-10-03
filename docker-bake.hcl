@@ -19,6 +19,8 @@ variable "SIGNING_KEY" {
   description = "PEM file holding the module signing private key and certificate"
 }
 
+variable "MODULE_SIGNING_CERT_SHA256" {}
+
 variable "KBUILD_BUILD_VERSION" {
   description = "Fingerprint of the kernel build inputs, reported by `uname -v`"
 }
@@ -42,6 +44,7 @@ target "_kernel" {
   args = {
     KERNEL_RELEASE       = KERNEL_RELEASE
     KBUILD_BUILD_VERSION = KBUILD_BUILD_VERSION
+    MODULE_SIGNING_CERT_SHA256 = MODULE_SIGNING_CERT_SHA256
     NVIDIA_VERSION       = "580.178.04"
     GDS_VERSION          = "2.29.4"
   }

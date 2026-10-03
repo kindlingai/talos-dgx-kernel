@@ -13,8 +13,8 @@ SOURCE_DATE_EPOCH := 1789481248
 
 # `uname -v` reports this hash of the files the kernel build reads, so two
 # kernels with the same release string identify the inputs they came from.
-KERNEL_INPUTS        := Dockerfile kernel/config $(sort $(wildcard kernel/patches/* scripts/*))
-KBUILD_BUILD_VERSION := $(shell shasum -a 256 $(KERNEL_INPUTS) | shasum -a 256 | cut -c1-12)
+KERNEL_CONFIG       := kernel/config
+KBUILD_BUILD_VERSION := $(shell python3 scripts/kernel-fingerprint.py $(KERNEL_CONFIG))
 
 TAG         ?= $(TALOS_VERSION)-$(lastword $(subst -, ,$(KERNEL_RELEASE)))
 IMAGE       ?= ghcr.io/kindlingai/talos-dgx-kernel/installer
@@ -22,13 +22,15 @@ SIGNING_KEY ?= $(CURDIR)/keys/module-signing.pem
 PROGRESS    ?= auto
 
 BUILDER        ?= talos-dgx-kernel
+REQUIRE_EXISTING_BUILDER ?= false
+MODULE_SIGNING_CERT_SHA256 = $(shell bash scripts/signing-key-id.sh "$(SIGNING_KEY)" 2>/dev/null)
 BUILDKIT_IMAGE := moby/buildkit:v0.33.1@sha256:cec9f139f45e93c5c69c60f8b07cfad9f43f4ef6b6a6cd917527fea5ff2e3dea
 
 OUT       := $(CURDIR)/_out
 TALOS_SRC := $(CURDIR)/.work/talos
 IMAGER    := talos-dgx-kernel/imager:$(TALOS_VERSION)
 
-export TALOS_VERSION TALOS_COMMIT KERNEL_RELEASE KBUILD_BUILD_VERSION SOURCE_DATE_EPOCH SIGNING_KEY OUT TALOS_SRC
+export TALOS_VERSION TALOS_COMMIT KERNEL_RELEASE KBUILD_BUILD_VERSION SOURCE_DATE_EPOCH SIGNING_KEY OUT TALOS_SRC MODULE_SIGNING_CERT_SHA256
 
 # The signing key may live outside the checkout (CI writes it to RUNNER_TEMP).
 BAKE   := docker buildx bake --builder $(BUILDER) --progress $(PROGRESS) --allow fs.read=$(SIGNING_KEY)
@@ -47,8 +49,20 @@ all: installer iso
 	cat $(OUT)/SHA256SUMS $(OUT)/OCI-DIGESTS
 
 builder:
-	docker buildx inspect $(BUILDER) >/dev/null 2>&1 || \
-		docker buildx create --name $(BUILDER) --driver docker-container --driver-opt image=$(BUILDKIT_IMAGE)
+	@if ! docker buildx inspect $(BUILDER) >/dev/null 2>&1; then \
+		test "$(REQUIRE_EXISTING_BUILDER)" != true || { echo "Required persisted builder missing: $(BUILDER)" >&2; exit 1; }; \
+		docker buildx create --name $(BUILDER) --driver docker-container --driver-opt image=$(BUILDKIT_IMAGE); \
+	fi
+	docker buildx inspect $(BUILDER)
+
+.PHONY: test cache-usage
+# Small, offline tests; never starts a Docker build.
+test:
+	python3 -m unittest discover -s tests -v
+
+cache-usage:
+	docker buildx du --builder $(BUILDER)
+
 
 # Every build signs modules with this key and embeds its certificate in the
 # kernel, so the same key reproduces the same artifacts.
@@ -61,6 +75,7 @@ $(SIGNING_KEY):
 
 kernel: builder
 	@test -f "$(SIGNING_KEY)" || { echo "SIGNING_KEY=$(SIGNING_KEY): run 'make signing-key' or point SIGNING_KEY at the existing key" >&2; exit 1; }
+	@test -n "$(MODULE_SIGNING_CERT_SHA256)" || { echo "Invalid signing key/certificate" >&2; exit 1; }
 	$(BAKE) kernel
 
 talos-source: $(TALOS_SRC)/.git/talos-dgx-kernel-$(TALOS_COMMIT)

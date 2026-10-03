@@ -25,11 +25,30 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
-      - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+      - name: Set up persisted Blacksmith builder
+        uses: useblacksmith/setup-docker-builder@19215110ab936351210feebdfa5b440b4493e184 # v2.2.0 (v2)
         with:
-          name: talos-dgx-kernel
-          driver: docker-container
-          driver-opts: image=moby/buildkit:v0.33.1@sha256:cec9f139f45e93c5c69c60f8b07cfad9f43f4ef6b6a6cd917527fea5ff2e3dea
+          cache-key: talos-dgx-arm64-buildkit-v1
+          buildx-version: v0.37.1
+          buildkit-version: v0.33.1
+          platforms: linux/arm64
+          nofallback: true
+          max-parallelism: 1
+
+      # The action has no builder-name output. It selects the persisted builder.
+      - name: Select and inspect persisted builder
+        run: |
+          builder=$(docker buildx inspect --format '{{.Name}}')
+          test "$(docker buildx inspect --format '{{.Driver}}')" = remote
+          [[ "${builder}" == blacksmith-* ]]
+          test "$(findmnt -n -o TARGET --target /var/lib/buildkit)" = /var/lib/buildkit
+          echo "BUILDER=${builder}" >> "${GITHUB_ENV}"
+          echo "REQUIRE_EXISTING_BUILDER=true" >> "${GITHUB_ENV}"
+          docker buildx inspect "${builder}" --bootstrap
+          docker buildx du --builder "${builder}"
+
+      - name: Offline build-contract tests
+        run: make test
 
       - name: Write module signing key
         env:
@@ -40,6 +59,14 @@ jobs:
 
       - name: Build
         run: make PROGRESS=plain SIGNING_KEY="${RUNNER_TEMP}/module-signing.pem"
+
+      - name: Cache usage after build
+        if: always() && env.BUILDER != ''
+        run: make cache-usage
+
+      - name: Remove signing secret from runner
+        if: always()
+        run: rm -f "${RUNNER_TEMP}/module-signing.pem"
 
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
