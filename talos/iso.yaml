@@ -13,10 +13,10 @@ customization:
 input:
   baseInstaller:
     imageRef: talos-dgx-kernel/installer
-    ociPath: /oci/installer-base
+    ociPath: /oci/talos/@PAGE@/installer-base
   systemExtensions:
-    - ociPath: /oci/nvidia-extension
-    - ociPath: /oci/dispram-extension
+    - ociPath: /oci/variants/@VARIANT@/nvidia-extension
+    - ociPath: /oci/common/dispram-extension
     - imageRef: ghcr.io/siderolabs/nvidia-container-toolkit-lts@sha256:0ad95abe15402c9bcd21600079c46f2f14263cf469d1a5385d29417ddf03d001
 output:
   kind: iso

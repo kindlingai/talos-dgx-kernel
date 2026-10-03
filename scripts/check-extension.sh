@@ -5,7 +5,7 @@
 #   - the layout passes the Talos extensions validator
 #
 # Usage: check-extension.sh KERNEL_ROOTFS EXTENSION
-# Environment: KERNEL_RELEASE
+# Environment: KERNEL_RELEASE, DRIVER_FLAVOR
 set -euo pipefail
 
 kernel_rootfs=$1
@@ -25,4 +25,9 @@ cp -a "${extension}/rootfs/${modules}/extras" "${combined}/lib/modules/${KERNEL_
 "$(dirname "$0")/check-modules.sh" "${kernel_rootfs}/boot/System.map" "${combined}"
 rm -rf "${combined}"
 
-extensions-validator validate --rootfs="${extension}" --pkg-name=nvidia-open-gpu-kernel-modules-lts
+case "${DRIVER_FLAVOR:?}" in
+    open) package=nvidia-open-gpu-kernel-modules-lts ;;
+    proprietary) package=nvidia-gpu-kernel-modules-lts ;;
+    *) exit 1 ;;
+esac
+extensions-validator validate --rootfs="${extension}" --pkg-name="${package}"

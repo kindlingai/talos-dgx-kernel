@@ -12,12 +12,38 @@ variable "TALOS_SRC" {
 
 variable "TALOS_VERSION" {}
 variable "TALOS_COMMIT" {}
-variable "KERNEL_RELEASE" {}
+variable "KERNEL_RELEASE" {
+  validation {
+    condition = KERNEL_RELEASE == "6.17.13-talos-dgx1022.6-${KERNEL_PAGE_SIZE}"
+    error_message = "KERNEL_RELEASE must match the selected .6 page geometry"
+  }
+}
+variable "KERNEL_CONFIG" {
+  validation {
+    condition = KERNEL_CONFIG == "kernel/config-${KERNEL_PAGE_SIZE}"
+    error_message = "KERNEL_CONFIG must match the selected page geometry"
+  }
+}
+variable "KERNEL_PAGE_SIZE" {
+  validation {
+    condition = contains(["4k", "64k"], KERNEL_PAGE_SIZE)
+    error_message = "KERNEL_PAGE_SIZE must be 4k or 64k"
+  }
+}
+variable "DRIVER_FLAVOR" {}
+variable "VARIANT" {
+  validation {
+    condition = contains(["proprietary-4k", "open-4k", "open-64k"], VARIANT) && VARIANT == "${DRIVER_FLAVOR}-${KERNEL_PAGE_SIZE}"
+    error_message = "Supported variants: proprietary-4k, open-4k, open-64k; driver/page must match"
+  }
+}
 variable "SOURCE_DATE_EPOCH" {}
 
 variable "SIGNING_KEY" {
   description = "PEM file holding the module signing private key and certificate"
 }
+
+variable "MODULE_SIGNING_CERT_SHA256" {}
 
 variable "KBUILD_BUILD_VERSION" {
   description = "Fingerprint of the kernel build inputs, reported by `uname -v`"
@@ -41,7 +67,10 @@ target "_kernel" {
   platforms  = ["linux/arm64"]
   args = {
     KERNEL_RELEASE       = KERNEL_RELEASE
+    KERNEL_CONFIG        = KERNEL_CONFIG
+    KERNEL_PAGE_SIZE     = KERNEL_PAGE_SIZE
     KBUILD_BUILD_VERSION = KBUILD_BUILD_VERSION
+    MODULE_SIGNING_CERT_SHA256 = MODULE_SIGNING_CERT_SHA256
     NVIDIA_VERSION       = "580.178.04"
     GDS_VERSION          = "2.29.4"
   }
@@ -51,23 +80,30 @@ target "_kernel" {
 target "kernel" {
   inherits = ["_kernel"]
   target   = "kernel"
-  output   = ["type=oci,tar=false,rewrite-timestamp=true,dest=${OUT}/oci/kernel"]
+  output   = ["type=oci,tar=false,rewrite-timestamp=true,dest=${OUT}/oci/kernels/${KERNEL_PAGE_SIZE}"]
 }
 
 target "nvidia-extension" {
   inherits = ["_kernel"]
   target   = "nvidia-extension"
-  output   = ["type=oci,tar=false,rewrite-timestamp=true,dest=${OUT}/oci/nvidia-extension"]
+  args = {
+    DRIVER_FLAVOR = DRIVER_FLAVOR
+    VARIANT       = VARIANT
+    EXTENSION_NAME = DRIVER_FLAVOR == "open" ? "nvidia-open-gpu-kernel-modules-lts" : "nvidia-gpu-kernel-modules-lts"
+  }
+  output   = ["type=oci,tar=false,rewrite-timestamp=true,dest=${OUT}/oci/variants/${VARIANT}/nvidia-extension"]
 }
 
 target "dispram-extension" {
-  inherits = ["_kernel"]
+  inherits   = ["_reproducible"]
+  context    = "."
+  dockerfile = "Dockerfile"
+  platforms  = ["linux/arm64"]
+  args = {
+    NVIDIA_VERSION = "580.178.04"
+  }
   target   = "dispram-extension"
-  output   = ["type=oci,tar=false,rewrite-timestamp=true,dest=${OUT}/oci/dispram-extension"]
-}
-
-group "kernel" {
-  targets = ["kernel", "nvidia-extension", "dispram-extension"]
+  output   = ["type=oci,tar=false,rewrite-timestamp=true,dest=${OUT}/oci/common/dispram-extension"]
 }
 
 # Talos's own Dockerfile, built with the arguments its Makefile passes at
@@ -78,7 +114,7 @@ target "_talos" {
   context    = TALOS_SRC
   dockerfile = "Dockerfile"
   contexts = {
-    kernelcustom = "oci-layout://${OUT}/oci/kernel"
+    kernelcustom = "oci-layout://${OUT}/oci/kernels/${KERNEL_PAGE_SIZE}"
   }
   args = {
     ABBREV_TAG                   = TALOS_VERSION
@@ -177,7 +213,7 @@ target "installer-base" {
   inherits  = ["_talos"]
   target    = "installer-base"
   platforms = ["linux/arm64"]
-  output    = ["type=oci,tar=false,rewrite-timestamp=true,dest=${OUT}/oci/installer-base"]
+  output    = ["type=oci,tar=false,rewrite-timestamp=true,dest=${OUT}/oci/talos/${KERNEL_PAGE_SIZE}/installer-base"]
 }
 
 # The imager runs on the build host and carries the arm64 kernel and initramfs.
@@ -187,7 +223,7 @@ target "imager" {
   args = {
     INSTALLER_ARCH = "arm64"
   }
-  tags   = ["talos-dgx-kernel/imager:${TALOS_VERSION}"]
+  tags   = ["talos-dgx-kernel/imager:${TALOS_VERSION}-${KERNEL_PAGE_SIZE}"]
   output = ["type=docker,rewrite-timestamp=true"]
 }
 

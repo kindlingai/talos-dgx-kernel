@@ -1,343 +1,257 @@
 # Talos DGX kernel
 
-Talos Linux **v1.14.1** for NVIDIA DGX Spark (arm64), built with:
+Talos **v1.14.1** for NVIDIA DGX Spark (arm64), release **v1.14.1-dgx1022.6**.
+Linux sources remain Ubuntu `linux-nvidia-6.17` 6.17.0-1022.22 plus the pinned
+`kernel/patches/series`. NVIDIA stays **580.178.04** and GPUDirect Storage stays
+**2.29.4**. The toolchain, security config, BTF, and signing checks remain enabled.
 
-- **Linux 6.17.13-talos-dgx1022.5**: Ubuntu `linux-nvidia-6.17` 6.17.0-1022.22 plus the
-  patches in `kernel/patches/series`, configured by `kernel/config` with 64 KiB pages.
-- **NVIDIA 580.178.04** open GPU kernel modules and **GPUDirect Storage 2.29.4**
-  (`nvidia-fs`), packaged as the `nvidia-open-gpu-kernel-modules-lts` system extension.
-- **dispram**: the `dispramd` service, which lends the 2046 MiB GB10 display carveout to
-  CUDA processes ([dispram/README.md](dispram/README.md)).
-- The upstream `nvidia-container-toolkit-lts` system extension.
+## Installer choices
 
-## Page size
+| Variant | CPU pages | Kernel release | NVIDIA source |
+| --- | --- | --- | --- |
+| `proprietary-4k` | 4 KiB | `6.17.13-talos-dgx1022.6-4k` | archive `kernel/` |
+| `open-4k` | 4 KiB | `6.17.13-talos-dgx1022.6-4k` | archive `kernel-open/` |
+| `open-64k` | 64 KiB | `6.17.13-talos-dgx1022.6-64k` | archive `kernel-open/` |
 
-The kernel uses 64 KiB pages (`CONFIG_ARM64_64K_PAGES`), the page size of Ubuntu's
-`nvidia-64k` flavour of the same source. The GPU runs on NVIDIA's open kernel modules,
-built from `kernel-open/` in the driver archive; they initialize GB10 under 64 KiB pages,
-as Ubuntu's `linux-modules-nvidia-580-open-*-nvidia-64k` packages do.
+The two 4 KiB installers share the **same built kernel**, Talos installer base,
+and imager. Only their NVIDIA/GDS extension differs. The 64 KiB kernel is built
+separately, once. Driver and page size are installer-time choices, not a runtime
+page-size switch. `proprietary-64k` is rejected by Make, Bake, and the module script.
+There is no packing-off build variant and no unsuffixed `.6` image alias.
 
-- Page descriptors (64 bytes per page) take 128 MiB per 128 GiB of RAM, against 2 GiB with
-  4 KiB pages. Page tables have 3 levels for 48-bit virtual addresses.
-- The contiguous memory allocator reserves 1024 MiB (`CONFIG_CMA_SIZE_MBYTES`), the value
-  Ubuntu sets for `nvidia-64k`. Movable allocations also use that area.
-- PMD-level transparent huge pages are 512 MiB. 2 MiB pages come from hugetlb
-  (`hugepagesz=2M hugepages=<count>` on the kernel command line) and from multi-size THP
-  (`/sys/kernel/mm/transparent_hugepage/hugepages-2048kB/enabled`).
-- The kernel allocates memory in 64 KiB units, so each cached file and each small
-  anonymous mapping occupies at least 64 KiB. Programs that assume a 4 KiB page size,
-  such as jemalloc built with `--with-lg-page=12`, need builds for 64 KiB pages.
-- Swap areas need `mkswap` under this kernel before use.
+Both open variants apply the same two patches in the same order:
 
-`extension/patches/` holds the driver patches, applied in `series` order:
+- **HUB ATS CUDA workaround**, by Matt Mastracci:
+  `0001-nvidia-uvm-flush-gpu-tlb-after-hub-ats-faults.patch` invalidates GPU TLBs
+  after servicing copy-engine ATS faults. This avoids stale entries on 64 KiB
+  kernels during pageable-memory CUDA copies.
+- **GPU leaf-table packing**, by Christopher Owen:
+  `0002-nvidia-uvm-pack-user-leaf-page-tables.patch`, from
+  [dgx-spark-memory-saver](https://github.com/christopherowen/dgx-spark-memory-saver),
+  packs small user leaf tables into shared CPU pages on coherent integrated
+  GPUs. It is enabled by default and inert on 4 KiB kernels. Both patches are
+  mandatory in the open build script; the proprietary source is not patched.
 
-- `0001-nvidia-uvm-flush-gpu-tlb-after-hub-ats-faults.patch` (Matt Mastracci): after
-  servicing an ATS fault from a copy engine (HUB client), nvidia-uvm invalidates the GPU
-  TLB on every page size. Upstream invalidates only on 4 KiB kernels, so on 64 KiB
-  kernels a copy from pageable memory that faults on a freshly populated page faults
-  again on the stale TLB entry and stalls. libcuda triggers this: before a pageable
-  copy it populates `[align_down(start), align_down(start) + size)`, which leaves the
-  last page unpopulated when `start` is unaligned.
-- `0002-nvidia-uvm-pack-user-leaf-page-tables.patch` (Christopher Owen,
-  [dgx-spark-memory-saver](https://github.com/christopherowen/dgx-spark-memory-saver)):
-  nvidia-uvm backs each GPU page table with a whole CPU page. On GB10 the tables for
-  64 KiB GPU pages are 256 bytes, one per 2 MiB of GPU-mapped memory, so upstream spends
-  64 KiB per 2 MiB on a 64 KiB kernel (3.1%, about 3 GiB for a 100 GiB model) against
-  4 KiB on a 4 KiB kernel. The patch gives each of these tables a 4 KiB slot in a shared
-  64 KiB page, sixteen per page, which brings the overhead back to that of 4 KiB pages.
-  It applies only to user page trees on a coherent integrated GPU without vidmem; every
-  other table keeps the upstream allocator. The read-only `nvidia_uvm` parameter
-  `uvm_pack_sysmem_leaf_tables` (default `1`) set to `0` restores the upstream
-  allocator, through the machine configuration:
+Each extension builds GDS against the matching driver's `Module.symvers` and
+headers. Open extensions use `nvidia-open-gpu-kernel-modules-lts`; proprietary
+uses `nvidia-gpu-kernel-modules-lts`. Manifests and SPDX documents name the variant.
+All installers also include the same [dispram service](dispram/README.md) and
+pinned upstream `nvidia-container-toolkit-lts` extension. Runtime behavior of
+newly built variants still needs separate boot/CUDA validation.
 
-  ```yaml
-  machine:
-    kernel:
-      modules:
-        - name: nvidia_uvm
-          parameters:
-            - uvm_pack_sysmem_leaf_tables=0
-  ```
+## Kernel config policy
 
-Drivers from 590.44.01 on also need
-[NVIDIA/open-gpu-kernel-modules#1269](https://github.com/NVIDIA/open-gpu-kernel-modules/issues/1269)
-on 64 KiB kernels; 580.178.04 sizes DMA submaps for 64 KiB alignment, which 64 KiB pages
-meet.
+- `kernel/config-4k` is the `.1` tag's full config, with only `CONFIG_LOCALVERSION`
+  changed to `-talos-dgx1022.6-4k`.
+- `kernel/config-64k` is the `.5` full config, with only `CONFIG_LOCALVERSION`
+  changed to `-talos-dgx1022.6-64k`.
+- The page configs retain their existing dependent page geometry and Kconfig
+  availability differences. These include page shifts, page-table levels,
+  address randomization limits, huge-page sharing/swap features, and drivers
+  unavailable with 64 KiB pages. No unrelated tuning is added.
+- **CMA policy is deliberately unchanged:** 128 MiB for 4 KiB, 1024 MiB for
+  64 KiB, matching the previous builds and Ubuntu's `nvidia-64k` policy.
+  This reservation difference must be accounted for in page-size comparisons.
+- Full `olddefconfig` equality is required during each real build. Offline tests
+  also hash both configs against the historical baselines, excluding only the
+  release string. They do not replace the toolchain's Kconfig check.
 
-## Versions
-
-The kernel release is `6.17.13-talos-dgx<ABI>.<revision>`:
-
-- `<ABI>` is the Ubuntu `linux-nvidia-6.17` ABI number the source comes from (`1022`).
-- `<revision>` counts this repository's builds for that ABI. Raise it whenever the kernel
-  or an extension changes: config, patches, sources, or toolchain.
-
-Releases are tagged `<Talos version>-dgx<ABI>.<revision>`, for example
-`v1.14.1-dgx1022.5`.
-
-`uname -v` starts with `#<fingerprint>`: the first 12 hex digits of a SHA-256 over the files
-the kernel build reads (`Dockerfile`, `kernel/config`, `kernel/patches/`, `scripts/`). The
-`Makefile` computes it from the file contents, so any change to those files gives a new
-fingerprint, and identical files give the same one on every machine.
-
-## Outputs
-
-`make` writes to `_out/`:
-
-| File                  | Use                                                                    |
-| --------------------- | ---------------------------------------------------------------------- |
-| `installer-arm64.tar` | Installer image. Push it, then reference it from `machine.install.image` or `talosctl upgrade --image`. |
-| `metal-arm64.iso`     | Bootable installation ISO.                                             |
-| `SHA256SUMS`          | Checksums of the installer and the ISO.                                |
-| `OCI-DIGESTS`         | Manifest digests of the images below; identical for identical inputs.  |
-| `oci/kernel`          | Kernel image in the Talos `PKG_KERNEL` layout (OCI layout).            |
-| `oci/nvidia-extension`| NVIDIA system extension image (OCI layout).                            |
-| `oci/dispram-extension`| dispram system extension image (OCI layout).                          |
-| `oci/installer-base`  | Talos installer base built for this kernel (OCI layout).               |
-
-## How the build works
-
-```mermaid
-flowchart LR
-  src[Pinned sources<br/>kernel/ extension/ dispram/] -->|Dockerfile| kernel[oci/kernel]
-  src -->|Dockerfile| ext[oci/nvidia-extension<br/>oci/dispram-extension]
-  talos[Talos source<br/>+ talos/source.patch] -->|Talos Dockerfile<br/>PKG_KERNEL=kernel| base[oci/installer-base]
-  kernel --> base
-  talos --> imager[imager image]
-  kernel --> imager
-  imager -->|talos/installer.yaml| installer[installer-arm64.tar]
-  imager -->|talos/iso.yaml| iso[metal-arm64.iso]
-  base --> installer
-  ext --> installer
-  base --> iso
-  ext --> iso
-```
-
-1. **Kernel and extensions** (`Dockerfile`, bake group `kernel`). BuildKit downloads the
-   source archives by checksum, applies the patches, builds the kernel with the Sidero
-   Labs LLVM toolchain, then builds the NVIDIA and GDS modules against the same tree, and
-   `dispramd` against the RM headers of the same driver release. The stage scripts live
-   in `scripts/`; each one checks its output (config, kernel release, module signatures
-   and vermagic, symbol resolution, extension layout).
-2. **Talos images** (bake group `talos`). Talos's own Dockerfile at the pinned commit,
-   with `talos/source.patch` applied, builds `installer-base` and `imager` using the
-   kernel image from step 1 as `PKG_KERNEL`.
-3. **Boot assets**. The imager turns the installer base and both extensions into the
-   installer image and the ISO, using the profiles in `talos/`.
-
-Builds run natively on amd64 and arm64 hosts; the kernel always targets arm64.
-
-| Path                    | Contents                                                     |
-| ----------------------- | ------------------------------------------------------------ |
-| `Makefile`              | Entry point and the cross-cutting pins (Talos version and commit, kernel release, `SOURCE_DATE_EPOCH`). |
-| `Dockerfile`            | Kernel and NVIDIA extension stages, source URLs and checksums, toolchain images. |
-| `docker-bake.hcl`       | Build targets, outputs, and the Talos build arguments with package images pinned by digest. |
-| `scripts/`              | Stage scripts run inside the build.                         |
-| `kernel/`               | Kernel config, patches, SPDX document, signing key template. |
-| `extension/`            | NVIDIA extension manifest, modprobe policy, SPDX document.   |
-| `dispram/`              | `dispramd` source, extension manifest and service definition. |
-| `talos/`                | Talos source patch and imager profiles.                      |
-| `.github/workflows/`    | CI build and release.                                        |
-
-## Requirements
-
-- Docker Engine or Docker Desktop with buildx. `make` creates a `docker-container`
-  builder named `talos-dgx-kernel` running the pinned BuildKit version.
-- GNU Make, Git, and OpenSSL. `crane` for `make push`, `gh` for `make release`.
-- Memory and disk for the kernel build. The build uses every CPU the builder has. A
-  builder with 12 CPUs and 24 GiB of memory builds it; 8 GiB runs out of memory while
-  generating BTF. BuildKit state for one build takes about 30 GiB of disk.
-
-## Module signing key
-
-The kernel embeds the certificate of one signing key and enforces module signatures
-(`module.sig_enforce=1`). Every build signs all modules, including the NVIDIA ones, with
-this key. Keeping the key fixed makes builds reproducible and lets separately built
-extensions load on the same kernel.
-
-Create it once:
-
-```sh
-make signing-key   # writes keys/module-signing.pem (private key + certificate)
-```
-
-Store `keys/module-signing.pem` in your secret manager and add its contents as the
-`MODULE_SIGNING_KEY` repository secret for CI. Use the same file for every build of a
-release; `SIGNING_KEY=/path/to/key.pem` selects a key stored elsewhere.
+64 KiB pages reduce page-descriptor overhead, but also increase minimum allocation
+size and PMD-level huge-page size. Applications and allocators that assume 4 KiB
+pages need compatible builds. Recreate swap areas under the selected kernel.
 
 ## Build
 
-```sh
-make            # kernel, extension, Talos images, installer, ISO, SHA256SUMS, OCI-DIGESTS
-```
+Requirements: Docker with buildx, GNU Make, Bash, Git, OpenSSL, and Python 3.
+The build uses all builder CPUs; allow sufficient memory for BTF and disk for
+both complete Kbuild trees, Talos builds, OCI exports, and all six boot artifacts.
+CI uses the existing 16-vCPU Blacksmith arm64 runner and a 360-minute limit.
 
-Individual steps: `make kernel`, `make talos`, `make installer`, `make iso`. BuildKit
-caches every stage, so repeated runs rebuild only what changed. `make clean` removes
-`_out/` and the Talos checkout in `.work/`.
-
-### Reproducibility
-
-The same inputs and signing key produce the same kernel, NVIDIA extension, and
-`installer-base` images. `make` writes their manifest digests to `_out/OCI-DIGESTS`.
-Inputs are pinned as follows:
-
-- Source archives by SHA-256 (`Dockerfile`), Talos by commit (`Makefile`).
-- Every container image by digest: toolchain and validator (`Dockerfile`), Talos
-  packages (`docker-bake.hcl`), container toolkit extension (`talos/*.yaml`), BuildKit
-  and the Dockerfile frontend.
-- `SOURCE_DATE_EPOCH` drives Kbuild timestamps, image metadata, and file times
-  (`rewrite-timestamp=true` on every image output). Kbuild user and host are fixed in
-  the toolchain stage, and the Kbuild version is the input fingerprint.
-
-The Talos imager records the time it runs in two places: the installer image's
-creation time, and the file times of the system extensions archive it appends to the
-initramfs. Installers and ISOs from separate runs carry those timestamps and otherwise
-hold the same content, so `SHA256SUMS` identifies one run's files and `OCI-DIGESTS`
-identifies the build.
-
-To check a build, run `make` again on another machine or a fresh builder
-(`docker buildx prune --builder talos-dgx-kernel -af`) and compare `_out/OCI-DIGESTS`.
-
-## Release
-
-1. Raise the revision (see [Versions](#versions)) and commit.
-2. Push the commit and a tag for it:
-
-   ```sh
-   git tag v1.14.1-dgx1022.5 && git push origin main v1.14.1-dgx1022.5
-   ```
-
-The tag starts `.github/workflows/build.yaml` ([CI](#ci)), which builds everything and
-runs `make release`. That creates the GitHub release for the tag with
-`installer-arm64.tar`, `metal-arm64.iso`, `SHA256SUMS`, and `OCI-DIGESTS`. The release
-notes list the kernel release, its `uname -v` fingerprint, the checksums, and the image
-digests. `make release` also works from a local build, before CI reaches that step.
-
-Publishing the release runs `.github/workflows/publish.yaml`. It checks
-`installer-arm64.tar` against `SHA256SUMS`, pushes it to
-`ghcr.io/kindlingai/talos-dgx-kernel/installer:<tag>` with the workflow's `GITHUB_TOKEN`,
-and adds the pushed `image@sha256:digest` reference to the release notes.
-
-`make push` pushes the installer to any registry with `crane` and writes the pushed
-reference to `_out/installer.ref`:
+Use the **existing trusted module signing key**, not a fresh key for each variant:
 
 ```sh
-make push IMAGE=registry.example.com/talos/installer TAG=test
+make SIGNING_KEY=/secure/path/module-signing.pem    # all three choices
+make variant VARIANT=open-4k SIGNING_KEY=/secure/path/module-signing.pem
+make test                                         # offline contracts, no compilation
+make print-variant VARIANT=proprietary-4k
 ```
 
-### CI
+For a new, separate trust domain only, `make signing-key` creates
+`keys/module-signing.pem`. CI reads the repository's `MODULE_SIGNING_KEY` secret,
+uses a mode-0600 temporary file, and removes it afterward. The key is never copied
+into a layer, compiler cache, or uploaded artifact. `CONFIG_MODULE_SIG_KEY` stays
+`/run/secrets/module_signing_key`. All kernel, NVIDIA, and GDS modules use it.
 
-`.github/workflows/build.yaml` runs `make` for `v*` tags and manual dispatch on a
-16-vCPU Blacksmith arm64 runner (`blacksmith-16vcpu-ubuntu-2404-arm`), and uploads the
-outputs as a workflow artifact. The runner needs the memory and disk listed under
-[Requirements](#requirements); GitHub's standard runners for private repositories are
-smaller. `publish.yaml` only pushes a tarball and runs on a 2-vCPU Blacksmith runner.
+`make` runs these stages in order, even under `make -j`:
 
-For a tag without a release, the job runs `make release`, then `publish.yaml`. For a tag
-whose release already exists, the job compares its `OCI-DIGESTS` with the release's,
-which checks that the release reproduces on that runner.
+1. Build the common dispram extension.
+2. Build/export the 4 KiB kernel and its Talos installer base/imager.
+3. Package the proprietary 4 KiB extension, installer, and ISO.
+4. Package the open 4 KiB extension, installer, and ISO using the same kernel export.
+5. Build/export the 64 KiB kernel and its Talos installer base/imager.
+6. Package the open 64 KiB extension, installer, and ISO.
+7. Record provenance and verify the complete artifact/checksum matrix.
 
-Repository setup:
+`make kernel VARIANT=...` and `make talos VARIANT=...` are bounded intermediate
+steps. `package`, `installer`, and `iso` are internal assembly steps, not standalone
+build entry points. `package` rejects stale shared-kernel exports, including a
+changed signing certificate. No automatic whole-checkout cleanup is performed.
 
-- Secret `MODULE_SIGNING_KEY`: contents of `keys/module-signing.pem`.
+### Persistent compiler reuse
 
-## Install
+CI pins Blacksmith `setup-docker-builder` v2.2.0 by commit and uses the stable
+`talos-dgx-arm64-buildkit-v1` cache key with `nofallback: true`. BuildKit remains
+v0.33.1; the local builder retains its existing digest pin. The action selects a
+remote builder, which Make uses directly. CI verifies its name, driver, and
+`/var/lib/buildkit` mount; Make refuses to create a substitute builder.
 
-Reference the installer image by digest, for example
-`ghcr.io/kindlingai/talos-dgx-kernel/installer:v1.14.1-dgx1022.5@sha256:<digest>`. When
-the package is private, give nodes pull credentials through
-`machine.registries.config`.
+Blacksmith persists **layers and cache mounts** after successful jobs. The first
+run is cold, and failed jobs do not commit new cache state. The immutable
+`kernel-build` layer retains the entire compiled Kbuild tree, including
+`Module.symvers`, for subsequent driver builds and runs. Module-only scripts,
+extension patches, manifests, and imager profiles do not invalidate Linux inputs.
+Linux and NVIDIA downloads are separate dependencies, and script mounts are narrow.
 
-The LAN port gets an address by DHCP with no network configuration: Talos runs DHCPv4 on
-every physical link the machine configuration leaves unconfigured. The LAN port is the
-Realtek controller named `enP7s7` (PCI address `0007:01:00.0`), with the `r8127` driver in
-this kernel. Talos derives interface names from the bus location, so the name is the same
-on every Spark and under any driver. Configure it by name:
+A shared mutable Kbuild output directory is deliberately not used. Generated
+headers, source timestamps, and signing state must not leak across kernel inputs.
+Changed Linux inputs rebuild the stage. LLVM's content-addressed **ThinLTO cache**
+can reuse compilation work, partitioned by target architecture, page geometry,
+and the pinned LLVM/tools identity. No private-key bytes enter that cache.
+
+BuildKit secrets do not invalidate caches by themselves. The signing certificate's
+public DER SHA-256 is an explicit kernel-stage argument and provenance field.
+Both kernel and module scripts verify the secret's certificate ID and key pair.
+Rotation therefore invalidates signed layers without exporting the private key.
+
+Plain CI logs show `CACHED` stages and ThinLTO cache size before/after uncached
+kernel steps. Builder identity and cache usage are printed before/after the build.
+`make cache-usage BUILDER=<name>` reports the selected builder's cache usage.
+These controls are not a measured speedup: verify warm-run timings and Blacksmith's
+successful cache-commit log in real CI.
+
+### Talos source adaptation
+
+Each page size gets a separate checkout of pinned Talos commit
+`2f86b9d2a29b413deddd7122a8420b8913813615` under `.work/talos-<page>`.
+`talos/source.patch` applies common initramfs module-list changes: add `r8127`;
+remove `hkdf`, `libeth_xdp`, `libie_fwlog`, `dwmac-sun55i`, and `pcs-rzn1-miic`.
+`scripts/prepare-talos.py` then sets the exact page-qualified
+`DefaultKernelVersion`. It retains `vmxnet3` for 4 KiB and removes it for 64 KiB,
+matching the actual kernel configs. Upstream constant/list mismatches fail closed.
+
+## Outputs and provenance
+
+The release assets under `_out/` are exactly:
+
+```text
+installer-arm64-proprietary-4k.tar
+installer-arm64-open-4k.tar
+installer-arm64-open-64k.tar
+metal-arm64-proprietary-4k.iso
+metal-arm64-open-4k.iso
+metal-arm64-open-64k.iso
+SHA256SUMS
+OCI-DIGESTS
+VARIANTS.json
+```
+
+`SHA256SUMS` covers all six artifacts plus `OCI-DIGESTS` and `VARIANTS.json`.
+`VARIANTS.json` records driver/source selection, page size, releases, source commit,
+config and patch hashes, public certificate ID, artifact hashes, and OCI digests.
+Verification requires exactly all three choices, the shared 4 KiB kernel and
+installer-base digest, different page-kernel digests, identical open patch sets,
+and one certificate across all variants. Missing, stale, or altered files fail.
+
+Local OCI layouts are kept separately:
+
+- `_out/oci/kernels/{4k,64k}`
+- `_out/oci/talos/{4k,64k}/installer-base`
+- `_out/oci/variants/<variant>/nvidia-extension`
+- `_out/oci/common/dispram-extension`
+
+`uname -v` begins with the kernel input fingerprint. The hash covers the selected
+config, kernel patches, marked Linux Dockerfile stages/frontend pin, and kernel
+scripts. It excludes module and installer packaging. Kernel releases explicitly
+end in `-4k` or `-64k`; the release tag is explicitly `v1.14.1-dgx1022.6`, never
+derived from the final kernel-release component.
+
+The pinned inputs and `SOURCE_DATE_EPOCH` are unchanged. As before, the Talos
+imager records wall-clock timestamps in installers and extension archives.
+`SHA256SUMS` identifies one run's exact files; compare `OCI-DIGESTS` between runs
+for reproducibility. Existing releases are not replaced by newly timed tarballs.
+
+## CI and publication
+
+- Manual **branch** dispatch of `build.yaml` builds all choices and uploads the
+  nine release assets. It does **not** publish.
+- Pushing the explicit `.6` version tag starts the same build, creates a GitHub
+  release if absent, and calls `publish.yaml` once. The tag need not be on `main`.
+- If the release already exists, CI compares its `OCI-DIGESTS` and uses the
+  existing release artifacts. It does not overwrite them.
+- `publish.yaml` has only `workflow_call` and explicit `workflow_dispatch`
+  triggers. No competing `release:published` trigger exists.
+- The publisher downloads all three installers and both metadata files, checks
+  their hashes and matrix, and preflights every destination tag before any push.
+  An existing different digest, authentication failure, or unknown lookup error
+  stops publication. Each pushed tag is read back and checked.
+- Publication serializes by release tag, records labeled digest references in
+  the release notes, and reads those notes back to verify the update.
+
+The image tags are:
+
+```text
+ghcr.io/kindlingai/talos-dgx-kernel/installer:v1.14.1-dgx1022.6-proprietary-4k
+ghcr.io/kindlingai/talos-dgx-kernel/installer:v1.14.1-dgx1022.6-open-4k
+ghcr.io/kindlingai/talos-dgx-kernel/installer:v1.14.1-dgx1022.6-open-64k
+```
+
+There is **no unsuffixed alias**. Existing `.5` tags are outside this branch's
+publication scope. `make release` requires an existing Git tag and refuses to
+replace a release. `make push IMAGE=<registry/repository>` applies the same
+three suffixes and no-overwrite checks. It requires registry authentication.
+Review the branch and actual CI artifacts before tagging or publishing.
+
+## Install and runtime verification
+
+Choose the matching ISO or installer tag, then pin the published image digest in
+`machine.install.image` or `talosctl upgrade --image`. For example:
 
 ```yaml
 machine:
-  network:
-    interfaces:
-      - interface: enP7s7
-        dhcp: true
+  install:
+    image: ghcr.io/kindlingai/talos-dgx-kernel/installer:v1.14.1-dgx1022.6-open-64k@sha256:<published-digest>
 ```
 
-`deviceSelector.busPath: "0007:01:00.0"` selects the same port independently of Talos's
-interface naming. The ConnectX-7 ports are `enp1s0f0np0`, `enp1s0f1np1`, `enP2p1s0f0np0`,
-and `enP2p1s0f1np1` (`0000:01:00.0`, `0000:01:00.1`, `0002:01:00.0`, `0002:01:00.1`) on
-every Spark.
+When packages are private, configure `machine.registries.config` credentials.
+Keep a configuration backup and console recovery path before changing a node.
+Runtime acceptance is separate: verify the page-qualified kernel release,
+`uname -v`, page size, extensions, networking, Kubernetes readiness, and CUDA/GDS
+workloads. A successful build or publication does not prove any of those checks.
 
-### New machine from the ISO
+The Realtek LAN driver is `r8127`. The existing machine interface configuration
+and kernel arguments are unchanged by variant selection.
 
-1. Write `metal-arm64.iso` to a USB drive and boot the Spark from it. Talos starts in
-   maintenance mode with this kernel and its network drivers.
-2. Point the machine configuration at the installer image:
+## Tests and updates
 
-   ```yaml
-   machine:
-     install:
-       disk: /dev/nvme0n1
-       image: ghcr.io/kindlingai/talos-dgx-kernel/installer:v1.14.1-dgx1022.5@sha256:<digest>
-   ```
-
-   `talosctl gen config ... --install-image <image>` sets the same field.
-3. Apply it: `talosctl apply-config --insecure --nodes <ip> --file controlplane.yaml`.
-   Talos installs from the installer image and reboots into the installed system.
-
-### Upgrade a running Talos node
-
-Upgrade one node at a time and confirm it is healthy before moving on. Keep a backup of
-the node's configuration and a console path for recovery.
+`make test` uses stdlib unit tests, small explicit fixtures, temporary test
+certificates, and the real `docker buildx bake --print` parser when installed.
+It never compiles a kernel or runs an imager. Publication tests mock registry
+commands and do not access a registry. Workflow syntax can be checked with:
 
 ```sh
-export TALOSCONFIG=/secure/path/to/talosconfig
-NODE=node-address
-INSTALLER=ghcr.io/kindlingai/talos-dgx-kernel/installer:v1.14.1-dgx1022.5@sha256:<digest>
-
-talosctl --nodes "$NODE" read /proc/sys/kernel/random/boot_id
-
-# Stage the upgrade, then drain and power-cycle the node.
-talosctl --nodes "$NODE" upgrade --image "$INSTALLER" --no-reboot
-talosctl --nodes "$NODE" reboot --mode powercycle --drain --wait
-
-talosctl --nodes "$NODE" read /proc/version
-talosctl --nodes "$NODE" read /proc/sys/kernel/random/boot_id
-talosctl --nodes "$NODE" get linkstatus
-talosctl --nodes "$NODE" get extensions
+go run github.com/rhysd/actionlint/cmd/actionlint@v1.7.7 -shellcheck= -pyflakes= .github/workflows/*.yaml
 ```
 
-A healthy node reports kernel `6.17.13-talos-dgx1022.5` with the release's `uname -v`
-fingerprint, a new boot ID, a working LAN link and default route, Kubernetes `Ready`, and
-working NVIDIA GPU, CDI, and CUDA workloads.
-
-## Talos source patch
-
-`talos/source.patch` adapts Talos to this kernel:
-
-- `DefaultKernelVersion` is `6.17.13-talos-dgx1022.5`, so Talos userspace looks up modules
-  under that release.
-- `hack/modules-arm64.txt` (the modules copied into the initramfs) adds `r8127` and
-  drops six entries this kernel provides differently: `hkdf` is built in,
-  `libie_fwlog` is part of `ice.ko`, `libeth_xdp`, `dwmac-sun55i`, and `pcs-rzn1-miic`
-  are deselected in `kernel/config`, and `vmxnet3` requires 4 KiB or 16 KiB pages.
-
-## Updating
-
-| Change                     | Files                                                                     |
-| -------------------------- | ------------------------------------------------------------------------- |
-| Kernel source or patches   | `Dockerfile` (URLs, checksums), `kernel/patches/`, `kernel/config`, `kernel/kernel.spdx.json` |
-| Kernel release (revision)  | `Makefile` (`KERNEL_RELEASE`), `kernel/config` (`CONFIG_LOCALVERSION`), `talos/source.patch`, `extension/manifest.yaml`, `dispram/manifest.yaml`, both SPDX documents |
-| NVIDIA or GDS              | `Dockerfile` (checksums, including open-gpu-kernel-modules), `docker-bake.hcl` (versions), `extension/` (rebase `extension/patches/`), `dispram/manifest.yaml` |
-| Talos                      | `Makefile` (`TALOS_VERSION`, `TALOS_COMMIT`), `docker-bake.hcl` (arguments from Talos's Makefile, package digests), `talos/source.patch` |
-
-`kernel/config` is the full output of `make olddefconfig` for the pinned toolchain; the
-build stops when the two differ, so regenerate the config after toolchain or source
-changes.
+For future releases, update the explicit release constants in Make, scripts,
+configs, workflows, manifests, SPDX namespaces, tests, and this documentation.
+When changing a toolchain pin, update its ThinLTO cache partition identity too.
+Always retain full `olddefconfig`, SHA-512 signatures, vermagic, symbol-resolution,
+and Talos extension validation. Do not trade those checks for cache hits.
 
 ## Licenses
 
-Kernel sources and patches keep their upstream license notices (principally
-GPL-2.0-only). Talos source changes follow Talos's MPL-2.0 terms. NVIDIA's open GPU
-kernel modules are dual-licensed MIT/GPL-2.0. The `nvidia-container-toolkit-lts`
-extension carries NVIDIA's user-space driver under NVIDIA's license; review it and the
-other component licenses before distributing built images.
+Linux sources and patches keep their upstream license notices, principally
+GPL-2.0-only. Talos changes follow MPL-2.0. NVIDIA open kernel modules are dual
+MIT/GPL-2.0. The proprietary driver and the toolkit's user-space components carry
+NVIDIA license terms. Their SPDX files do not label proprietary modules as open
+source. Review the licenses from the pinned archives before distribution.

@@ -1,11 +1,7 @@
 name: publish
 
-# Pushes a release's installer-arm64.tar to ghcr.io/<repository>/installer:<tag>
-# and adds the pushed digest to the release notes. Runs when a release is
-# published and as the last step of build.yaml.
+# There is deliberately no release:published trigger. build.yaml calls this once.
 on:
-  release:
-    types: [published]
   workflow_call:
     inputs:
       tag:
@@ -14,7 +10,7 @@ on:
   workflow_dispatch:
     inputs:
       tag:
-        description: Release tag
+        description: Existing .6 release tag
         type: string
         required: true
 
@@ -22,30 +18,62 @@ permissions:
   contents: write
   packages: write
 
+concurrency:
+  group: publish-installers-${{ inputs.tag }}
+  cancel-in-progress: false
+
 jobs:
   publish:
     runs-on: blacksmith-2vcpu-ubuntu-2404-arm
     env:
-      TAG: ${{ inputs.tag || github.event.release.tag_name }}
+      TAG: ${{ inputs.tag }}
       IMAGE: ghcr.io/${{ github.repository }}/installer
       GH_TOKEN: ${{ github.token }}
       GH_REPO: ${{ github.repository }}
     steps:
+      - name: Validate publication scope
+        run: test "${TAG}" = v1.14.1-dgx1022.6
+
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: refs/tags/${{ inputs.tag }}
+
       - uses: imjasonh/setup-crane@feee3b6bb0d4c68370f256a4502498c9227e5c6b # v0.7
         with:
           version: v0.22.1
 
-      - name: Download installer
+      - name: Download and verify installers and provenance
         run: |
-          gh release download "${TAG}" --pattern installer-arm64.tar --pattern SHA256SUMS
-          grep ' installer-arm64.tar$' SHA256SUMS | sha256sum --check
+          mkdir -p _release
+          gh release download "${TAG}" --dir _release \
+            --pattern 'installer-arm64-*.tar' --pattern SHA256SUMS \
+            --pattern OCI-DIGESTS --pattern VARIANTS.json
+          python3 scripts/artifacts.py verify _release --installers-only
 
-      - name: Push installer image
+      - name: Push all three installer tags without overwriting
         run: |
-          ref=$(crane push installer-arm64.tar "${IMAGE}:${TAG}")
-          gh release view "${TAG}" --json body --jq .body > notes.md
-          if ! grep -qF "${ref}" notes.md; then
-            printf '\nInstaller image: %s\n' "\`${ref}\`" >> notes.md
-            gh release edit "${TAG}" --notes-file notes.md
-          fi
-          echo "${ref}" >> "${GITHUB_STEP_SUMMARY}"
+          printf '%s' "${GH_TOKEN}" | crane auth login ghcr.io --username "${GITHUB_ACTOR}" --password-stdin
+          python3 scripts/publish-installers.py _release "${IMAGE}" "${TAG}"
+
+      - name: Record and verify published references
+        run: |
+          gh release view "${TAG}" --json body --jq .body > _release/notes.md
+          python3 - <<'PY'
+          from pathlib import Path
+          notes = Path('_release/notes.md')
+          text = notes.read_text()
+          for line in Path('_release/INSTALLER-REFS').read_text().splitlines():
+              variant, ref = line.split('  ')
+              entry = f'- **{variant}** installer: `{ref}`'
+              if entry not in text:
+                  text += '\n' + entry + '\n'
+          notes.write_text(text)
+          PY
+          gh release edit "${TAG}" --notes-file _release/notes.md
+          gh release view "${TAG}" --json body > _release/notes-readback.json
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+          assert json.loads(Path('_release/notes-readback.json').read_text())['body'] == Path('_release/notes.md').read_text()
+          PY
+          cat _release/INSTALLER-REFS >> "${GITHUB_STEP_SUMMARY}"
