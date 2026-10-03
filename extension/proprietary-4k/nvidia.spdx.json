@@ -1,0 +1,50 @@
+{
+  "spdxVersion": "SPDX-2.3",
+  "dataLicense": "CC0-1.0",
+  "SPDXID": "SPDXRef-DOCUMENT",
+  "name": "nvidia-gpu-kernel-modules-lts",
+  "documentNamespace": "https://github.com/kindlingai/talos-dgx-kernel/spdx/nvidia-gpu-kernel-modules-lts-580.178.04-6.17.13-talos-dgx1022.6-4k",
+  "creationInfo": {
+    "creators": [
+      "Tool: talos-dgx-kernel"
+    ],
+    "created": "2026-09-15T14:07:28Z"
+  },
+  "packages": [
+    {
+      "name": "nvidia-gpu-kernel-modules",
+      "SPDXID": "SPDXRef-Package-nvidia-gpu-kernel-modules",
+      "versionInfo": "580.178.04",
+      "supplier": "Organization: NVIDIA Corporation",
+      "downloadLocation": "https://developer.download.nvidia.com/compute/nvidia-driver/redist/nvidia_driver/linux-sbsa/nvidia_driver-linux-sbsa-580.178.04-archive.tar.xz",
+      "filesAnalyzed": false,
+      "licenseConcluded": "NOASSERTION",
+      "licenseDeclared": "NOASSERTION",
+      "copyrightText": "NOASSERTION",
+      "licenseComments": "Proprietary NVIDIA modules from kernel/; consult the license included in the driver archive."
+    },
+    {
+      "name": "gds-nvidia-fs",
+      "SPDXID": "SPDXRef-Package-gds-nvidia-fs",
+      "versionInfo": "2.29.4",
+      "supplier": "Organization: NVIDIA Corporation",
+      "downloadLocation": "https://github.com/NVIDIA/gds-nvidia-fs/archive/refs/tags/v2.29.4.tar.gz",
+      "filesAnalyzed": false,
+      "licenseConcluded": "NOASSERTION",
+      "licenseDeclared": "GPL-2.0-only",
+      "copyrightText": "NOASSERTION"
+    }
+  ],
+  "relationships": [
+    {
+      "spdxElementId": "SPDXRef-DOCUMENT",
+      "relatedSpdxElement": "SPDXRef-Package-nvidia-gpu-kernel-modules",
+      "relationshipType": "DESCRIBES"
+    },
+    {
+      "spdxElementId": "SPDXRef-DOCUMENT",
+      "relatedSpdxElement": "SPDXRef-Package-gds-nvidia-fs",
+      "relationshipType": "DESCRIBES"
+    }
+  ]
+}

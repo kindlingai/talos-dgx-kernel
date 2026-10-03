@@ -4,7 +4,7 @@
 #
 # Targets:
 #   kernel             Talos PKG_KERNEL image
-#   nvidia-extension   Talos system extension with the NVIDIA open GPU and GDS modules
+#   nvidia-extension   Talos system extension with selected NVIDIA GPU and GDS modules
 #   dispram-extension  Talos system extension running dispramd (see dispram/README.md)
 #
 # docker-bake.hcl supplies the build arguments and the module signing key.
@@ -52,7 +52,8 @@ ARG KBUILD_BUILD_VERSION
 # Public certificate ID invalidates signed layers when the BuildKit secret changes.
 ARG MODULE_SIGNING_CERT_SHA256
 ARG TARGETARCH
-ARG KERNEL_PAGE_SIZE=64k
+ARG KERNEL_PAGE_SIZE
+ARG KERNEL_CONFIG
 # Partition compiler caches by target, page geometry, and both toolchain pins.
 ARG TOOLCHAIN_CACHE_ID=llvm-251882062d6c-tools-ad7d2319c0c8
 ENV THINLTO_CACHE_DIR=/var/cache/thinlto
@@ -60,7 +61,7 @@ RUN --mount=type=bind,source=scripts/build-kernel.sh,target=/scripts/build-kerne
     --mount=type=bind,source=scripts/check-modules.sh,target=/scripts/check-modules.sh \
     --mount=type=bind,source=scripts/signing-key-id.sh,target=/scripts/signing-key-id.sh \
     --mount=type=cache,id=thinlto-${TARGETARCH}-${KERNEL_PAGE_SIZE}-${TOOLCHAIN_CACHE_ID},target=/var/cache/thinlto,sharing=locked \
-    --mount=type=bind,source=kernel/config,target=/config \
+    --mount=type=bind,source=${KERNEL_CONFIG},target=/config \
     --mount=type=secret,id=module_signing_key,required=true \
     /scripts/build-kernel.sh /config /rootfs
 
@@ -81,21 +82,30 @@ ADD --checksum=sha256:f30d4c20feda9f570a69084573a72423067e1e2d46c50ca58c39166487
 
 FROM scratch AS kernel
 COPY --link --from=kernel-build /rootfs/ /
-COPY --link kernel/kernel.spdx.json /usr/share/spdx/kernel.spdx.json
+ARG KERNEL_PAGE_SIZE
+COPY --link kernel/kernel-${KERNEL_PAGE_SIZE}.spdx.json /usr/share/spdx/kernel.spdx.json
 
 FROM --platform=$BUILDPLATFORM ${VALIDATOR_IMAGE} AS validator
 
 FROM kernel-build AS nvidia-build
 ARG KERNEL_RELEASE
+ARG DRIVER_FLAVOR
+ARG NVIDIA_VERSION
+ARG GDS_VERSION
 WORKDIR /src
 RUN --mount=type=bind,source=scripts/build-nvidia.sh,target=/scripts/build-nvidia.sh \
+    --mount=type=bind,source=scripts/validate-variant.sh,target=/scripts/validate-variant.sh \
+    --mount=type=bind,source=scripts/signing-key-id.sh,target=/scripts/signing-key-id.sh \
     --mount=type=bind,source=extension/patches,target=/patches \
     --mount=type=bind,from=nvidia-downloads,target=/downloads \
     --mount=type=secret,id=module_signing_key,required=true \
     /scripts/build-nvidia.sh /downloads /patches /rootfs /extension/rootfs
-COPY extension/manifest.yaml /extension/manifest.yaml
+# Metadata is separate from compilation: packaging edits reuse signed modules.
+ARG VARIANT
+ARG EXTENSION_NAME
+COPY extension/${VARIANT}/manifest.yaml /extension/manifest.yaml
 COPY extension/nvidia.conf /extension/rootfs/usr/local/lib/modprobe.d/nvidia.conf
-COPY extension/nvidia-open-gpu-kernel-modules-lts.spdx.json /extension/rootfs/usr/local/share/spdx/nvidia-open-gpu-kernel-modules-lts.spdx.json
+COPY extension/${VARIANT}/nvidia.spdx.json /extension/rootfs/usr/local/share/spdx/${EXTENSION_NAME}.spdx.json
 RUN --mount=type=bind,source=scripts/check-extension.sh,target=/scripts/check-extension.sh \
     --mount=type=bind,source=scripts/check-modules.sh,target=/scripts/check-modules.sh \
     --mount=type=bind,from=validator,source=/extensions-validator,target=/usr/local/bin/extensions-validator \

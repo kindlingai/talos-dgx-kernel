@@ -1,0 +1,40 @@
+{
+  "spdxVersion": "SPDX-2.3",
+  "dataLicense": "CC0-1.0",
+  "SPDXID": "SPDXRef-DOCUMENT",
+  "name": "talos-dgx-kernel",
+  "documentNamespace": "https://github.com/kindlingai/talos-dgx-kernel/spdx/kernel-6.17.13-talos-dgx1022.6-4k",
+  "creationInfo": {
+    "creators": [
+      "Tool: talos-dgx-kernel"
+    ],
+    "created": "2026-09-15T14:07:28Z"
+  },
+  "packages": [
+    {
+      "name": "kernel",
+      "SPDXID": "SPDXRef-Package-kernel",
+      "versionInfo": "6.17.13",
+      "supplier": "NOASSERTION",
+      "downloadLocation": "https://launchpad.net/ubuntu/+source/linux-nvidia-6.17/6.17.0-1022.22",
+      "filesAnalyzed": false,
+      "licenseConcluded": "NOASSERTION",
+      "licenseDeclared": "GPL-2.0-only",
+      "copyrightText": "NOASSERTION",
+      "externalRefs": [
+        {
+          "referenceCategory": "SECURITY",
+          "referenceType": "cpe23Type",
+          "referenceLocator": "cpe:2.3:o:linux:linux_kernel:6.17.13:*:*:*:*:*:*:*"
+        }
+      ]
+    }
+  ],
+  "relationships": [
+    {
+      "spdxElementId": "SPDXRef-DOCUMENT",
+      "relatedSpdxElement": "SPDXRef-Package-kernel",
+      "relationshipType": "DESCRIBES"
+    }
+  ]
+}

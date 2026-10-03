@@ -1,11 +1,8 @@
 name: build
 
-# Builds the installer image and ISO on a 16-vCPU Blacksmith arm64 runner. The
-# build needs about 16 GB of memory and 60 GB of free disk.
-#
-# On a version tag (v*), the job publishes the release with `make release` and
-# publish.yaml pushes the installer image. When the release already exists, the
-# job instead checks that this build reproduces its OCI-DIGESTS.
+# Builds all three variants sequentially. Linux and Talos are shared by page size.
+# A tag publishes the verified release then calls publish.yaml exactly once.
+# Manual branch dispatch builds and uploads artifacts, without publishing.
 on:
   push:
     tags: ["v*"]
@@ -24,6 +21,10 @@ jobs:
     timeout-minutes: 360
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Validate release tag
+        if: github.ref_type == 'tag'
+        run: test "${GITHUB_REF_NAME}" = v1.14.1-dgx1022.6
 
       - name: Set up persisted Blacksmith builder
         uses: useblacksmith/setup-docker-builder@19215110ab936351210feebdfa5b440b4493e184 # v2.2.0 (v2)
@@ -72,10 +73,16 @@ jobs:
         with:
           name: talos-dgx-kernel
           path: |
-            _out/installer-arm64.tar
-            _out/metal-arm64.iso
+            _out/installer-arm64-proprietary-4k.tar
+            _out/installer-arm64-open-4k.tar
+            _out/installer-arm64-open-64k.tar
+            _out/metal-arm64-proprietary-4k.iso
+            _out/metal-arm64-open-4k.iso
+            _out/metal-arm64-open-64k.iso
             _out/SHA256SUMS
             _out/OCI-DIGESTS
+            _out/VARIANTS.json
+          if-no-files-found: error
 
       - name: Publish release
         if: github.ref_type == 'tag'

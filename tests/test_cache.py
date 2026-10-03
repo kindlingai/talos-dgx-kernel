@@ -20,9 +20,9 @@ class CacheContract(unittest.TestCase):
             for directory in ("scripts", "kernel", "extension", "talos", "dispram"):
                 shutil.copytree(ROOT / directory, tree / directory)
             shutil.copy(ROOT / "Dockerfile", tree / "Dockerfile")
-            config = "kernel/config"
+            config = "kernel/config-4k"
             before = fp.fingerprint(tree, config)
-            for name in ("scripts/build-nvidia.sh", "scripts/check-extension.sh", "scripts/build-dispram.sh", "extension/manifest.yaml", "talos/installer.yaml"):
+            for name in ("scripts/build-nvidia.sh", "scripts/check-extension.sh", "scripts/build-dispram.sh", "extension/open-4k/manifest.yaml", "talos/installer.yaml"):
                 with (tree / name).open("a") as file:
                     file.write("\n# module-only change\n")
                 self.assertEqual(before, fp.fingerprint(tree, config), name)
@@ -76,11 +76,16 @@ class CacheContract(unittest.TestCase):
         dockerfile = (ROOT / "Dockerfile").read_text()
         self.assertIn("thinlto-${TARGETARCH}-${KERNEL_PAGE_SIZE}-${TOOLCHAIN_CACHE_ID}", dockerfile)
         self.assertIn("target=/var/cache/thinlto,sharing=locked", dockerfile)
+        import re
+        llvm_match = re.search(r"ARG LLVM_IMAGE=.*@sha256:([a-f0-9]+)", dockerfile)
+        tools_match = re.search(r"ARG TOOLS_IMAGE=.*@sha256:([a-f0-9]+)", dockerfile)
+        assert llvm_match is not None and tools_match is not None
+        self.assertIn(f"TOOLCHAIN_CACHE_ID=llvm-{llvm_match[1][:12]}-tools-{tools_match[1][:12]}", dockerfile)
         self.assertIn("--thinlto-cache-dir=${THINLTO_CACHE_DIR}", (ROOT / "scripts/build-kernel.sh").read_text())
         for line in dockerfile.splitlines():
             if "module_signing_key" in line:
                 self.assertIn("type=secret", line)
-        self.assertIn('CONFIG_MODULE_SIG_KEY="/run/secrets/module_signing_key"', (ROOT / "kernel/config").read_text())
+        self.assertIn('CONFIG_MODULE_SIG_KEY="/run/secrets/module_signing_key"', (ROOT / "kernel/config-64k").read_text())
 
     def test_ci_persists_layers_and_cache_mounts(self):
         ci = (ROOT / ".github/workflows/build.yaml").read_text()
