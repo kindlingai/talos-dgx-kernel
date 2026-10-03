@@ -14,8 +14,8 @@ variable "TALOS_VERSION" {}
 variable "TALOS_COMMIT" {}
 variable "KERNEL_RELEASE" {
   validation {
-    condition = KERNEL_RELEASE == "6.17.13-talos-dgx1022.6-${KERNEL_PAGE_SIZE}"
-    error_message = "KERNEL_RELEASE must match the selected .6 page geometry"
+    condition = KERNEL_RELEASE == "6.17.13-talos-dgx1022.7-${KERNEL_PAGE_SIZE}"
+    error_message = "KERNEL_RELEASE must match the selected .7 page geometry"
   }
 }
 variable "KERNEL_CONFIG" {
@@ -104,6 +104,15 @@ target "dispram-extension" {
   }
   target   = "dispram-extension"
   output   = ["type=oci,tar=false,rewrite-timestamp=true,dest=${OUT}/oci/common/dispram-extension"]
+}
+
+target "toolkit-extension" {
+  inherits   = ["_reproducible"]
+  context    = "."
+  dockerfile = "Dockerfile"
+  platforms  = ["linux/arm64"]
+  target     = "toolkit-extension"
+  output     = ["type=oci,tar=false,rewrite-timestamp=true,dest=${OUT}/oci/common/toolkit-extension"]
 }
 
 # Talos's own Dockerfile, built with the arguments its Makefile passes at

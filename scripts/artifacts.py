@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Record and verify the exact .6 artifact matrix (stdlib only; no private keys)."""
+"""Record and verify the exact .7 artifact matrix (stdlib only; no private keys)."""
 import hashlib
 import json
 import os
@@ -9,7 +9,7 @@ import subprocess
 import sys
 
 ROOT = Path(__file__).resolve().parents[1]
-TAG = "v1.14.1-dgx1022.6"
+TAG = "v1.14.1-dgx1022.7"
 VARIANTS = ("proprietary-4k", "open-4k", "open-64k")
 PATCHES = ("0001-nvidia-uvm-flush-gpu-tlb-after-hub-ats-faults.patch",
            "0002-nvidia-uvm-pack-user-leaf-page-tables.patch")
@@ -62,7 +62,7 @@ def shared_identity(out, variant):
     fingerprint = subprocess.check_output([sys.executable, str(ROOT / "scripts/kernel-fingerprint.py"), "kernel/config-" + page], text=True).strip()
     return {
         "page_size": page,
-        "kernel_release": "6.17.13-talos-dgx1022.6-" + page,
+        "kernel_release": "6.17.13-talos-dgx1022.7-" + page,
         "kernel_build_fingerprint": fingerprint,
         "kernel_config_sha256": sha(ROOT / ("kernel/config-" + page)),
         "module_signing_certificate_sha256": certificate,
@@ -93,6 +93,7 @@ def record_variant(out, variant):
                   patches={name: sha(ROOT / "extension/patches" / name) for name in patches},
                   nvidia_oci_digest=oci_digest(out, "variants/" + variant + "/nvidia-extension"),
                   dispram_oci_digest=oci_digest(out, "common/dispram-extension"),
+                  toolkit_oci_digest=oci_digest(out, "common/toolkit-extension"),
                   artifacts={name: sha(out / name) for name in artifact_names(variant)})
     save(out / "variants" / variant / "provenance.json", record)
 
@@ -104,7 +105,7 @@ def validate_records(records):
         driver, page = variant.split("-")
         require(record["tag"] == TAG, "Wrong release tag")
         require(record["driver"] == driver and record["page_size"] == page, "Wrong driver/page mapping")
-        require(record["kernel_release"] == "6.17.13-talos-dgx1022.6-" + page, "Wrong kernel release")
+        require(record["kernel_release"] == "6.17.13-talos-dgx1022.7-" + page, "Wrong kernel release")
         require(record["talos_version"] == "v1.14.1" and record["talos_commit"] == TALOS_COMMIT, "Wrong Talos pin")
         require(record["nvidia_version"] == "580.178.04" and record["gds_version"] == "2.29.4", "Wrong driver pins")
         require(record["driver_source_directory"] == ("kernel-open" if driver == "open" else "kernel"), "Wrong driver source")
@@ -120,7 +121,7 @@ def validate_records(records):
         require(records[0][field] == records[1][field], "4 KiB variants did not share " + field)
     require(records[1]["kernel_oci_digest"] != records[2]["kernel_oci_digest"], "Kernel geometries collided")
     require(records[1]["patches"] == records[2]["patches"], "Open variants use different patches")
-    for field in ("module_signing_certificate_sha256", "source_commit", "dispram_oci_digest"):
+    for field in ("module_signing_certificate_sha256", "source_commit", "dispram_oci_digest", "toolkit_oci_digest"):
         require(len({r[field] for r in records}) == 1, "Variants differ in " + field)
 
 
@@ -132,6 +133,7 @@ def oci_lines(records):
         digests["talos/" + page + "/installer-base"] = r["installer_base_oci_digest"]
         digests["variants/" + variant + "/nvidia-extension"] = r["nvidia_oci_digest"]
         digests["common/dispram-extension"] = r["dispram_oci_digest"]
+        digests["common/toolkit-extension"] = r["toolkit_oci_digest"]
     return "".join(f"{digest}  {name}\n" for name, digest in sorted(digests.items()))
 
 

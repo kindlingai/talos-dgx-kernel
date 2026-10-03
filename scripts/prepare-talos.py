@@ -4,7 +4,7 @@ from pathlib import Path
 import sys
 
 source, release, page = sys.argv[1:]
-if page not in ("4k", "64k") or release != "6.17.13-talos-dgx1022.6-" + page:
+if page not in ("4k", "64k") or release != "6.17.13-talos-dgx1022.7-" + page:
     raise SystemExit("Unsupported kernel release/page geometry")
 constants = Path(source) / "pkg/machinery/constants/constants.go"
 text = constants.read_text()

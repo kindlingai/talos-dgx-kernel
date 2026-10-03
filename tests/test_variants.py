@@ -41,6 +41,7 @@ def fixture_oci(out, name):
 
 def fixture_release(out):
     fixture_oci(out, "common/dispram-extension")
+    fixture_oci(out, "common/toolkit-extension")
     with patch.dict(os.environ, {"MODULE_SIGNING_CERT_SHA256": "a" * 64}):
         for page in ("4k", "64k"):
             fixture_oci(out, "kernels/" + page)
@@ -75,8 +76,8 @@ class VariantContract(unittest.TestCase):
                      ("VARIANT=open-64k-packing-off",), ("VARIANT=../open-4k",),
                      ("VARIANT=proprietary-4k", "KERNEL_PAGE_SIZE=64k"),
                      ("VARIANT=open-64k", "KERNEL_CONFIG=kernel/config-4k"),
-                     ("VARIANT=open-4k", "KERNEL_RELEASE=6.17.13-talos-dgx1022.6-64k"),
-                     ("TAG=v1.14.1-dgx1022.5",)):
+                     ("VARIANT=open-4k", "KERNEL_RELEASE=6.17.13-talos-dgx1022.7-64k"),
+                     ("TAG=v1.14.1-dgx1022.6",)):
             with self.subTest(args=args):
                 result = make("print-variant", *args)
                 self.assertNotEqual(result.returncode, 0)
@@ -90,7 +91,7 @@ class VariantContract(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stderr)
         lines = [line for line in result.stdout.splitlines() if line.startswith("docker buildx bake")]
         targets = [line.split()[-1] for line in lines]
-        self.assertEqual(targets, ["dispram-extension", "kernel", "talos", "nvidia-extension", "nvidia-extension", "kernel", "talos", "nvidia-extension"])
+        self.assertEqual(targets, ["dispram-extension", "toolkit-extension", "kernel", "talos", "nvidia-extension", "nvidia-extension", "kernel", "talos", "nvidia-extension"])
         self.assertIn(".NOTPARALLEL:", (ROOT / "Makefile").read_text())
 
     def test_configs_are_exact_historical_inputs_except_release(self):
@@ -100,7 +101,7 @@ class VariantContract(unittest.TestCase):
         }
         for page, (revision, expected) in baselines.items():
             text = (ROOT / ("kernel/config-" + page)).read_text()
-            original = text.replace("-talos-dgx1022.6-" + page, "-talos-dgx1022." + revision)
+            original = text.replace("-talos-dgx1022.7-" + page, "-talos-dgx1022." + revision)
             self.assertEqual(hashlib.sha256(original.encode()).hexdigest(), expected)
             for required in ('CONFIG_MODULE_SIG_KEY="/run/secrets/module_signing_key"', "CONFIG_MODULE_SIG_SHA512=y", "CONFIG_DEBUG_INFO_BTF=y", "CONFIG_LTO_CLANG_THIN=y"):
                 self.assertIn(required, text)
@@ -128,7 +129,7 @@ class VariantContract(unittest.TestCase):
             text = (ROOT / "extension" / variant / "manifest.yaml").read_text()
             page = art.page_of(variant)
             self.assertIn(art.TAG + "-" + variant, text)
-            self.assertIn("6.17.13-talos-dgx1022.6-" + page, text)
+            self.assertIn("6.17.13-talos-dgx1022.7-" + page, text)
             spdx = json.loads((ROOT / "extension" / variant / "nvidia.spdx.json").read_text())
             self.assertIn("-" + page, spdx["documentNamespace"])
             self.assertEqual(spdx["packages"][0]["versionInfo"], "580.178.04")
@@ -137,15 +138,16 @@ class VariantContract(unittest.TestCase):
                 self.assertNotIn("open", spdx["name"])
                 self.assertEqual(spdx["packages"][0]["licenseDeclared"], "NOASSERTION")
 
-    def test_profiles_select_the_correct_three_oci_inputs(self):
+    def test_profiles_select_the_correct_oci_inputs(self):
         for variant in art.VARIANTS:
             for kind in ("installer", "iso"):
                 text = subprocess.check_output([sys.executable, str(ROOT / "scripts/render-profile.py"), kind, variant], text=True)
                 self.assertIn("/oci/variants/" + variant + "/nvidia-extension", text)
                 self.assertIn("/oci/talos/" + art.page_of(variant) + "/installer-base", text)
                 self.assertIn("/oci/common/dispram-extension", text)
+                self.assertIn("/oci/common/toolkit-extension", text)
                 self.assertNotIn("@PAGE@", text)
-                self.assertIn("nvidia-container-toolkit-lts@sha256:0ad95", text)
+                self.assertNotIn("imageRef: ghcr.io", text)
 
     def test_talos_page_specific_constant_and_vmxnet3(self):
         self.assertNotIn("DefaultKernelVersion", (ROOT / "talos/source.patch").read_text())
@@ -158,7 +160,7 @@ class VariantContract(unittest.TestCase):
                 modules = source / "hack/modules-arm64.txt"
                 modules.parent.mkdir()
                 modules.write_text("kernel/drivers/net/vmxnet3/vmxnet3.ko\n")
-                release = "6.17.13-talos-dgx1022.6-" + page
+                release = "6.17.13-talos-dgx1022.7-" + page
                 subprocess.run([sys.executable, str(ROOT / "scripts/prepare-talos.py"), str(source), release, page], check=True)
                 self.assertIn(release, constant.read_text())
                 self.assertEqual("vmxnet3" in modules.read_text(), page == "4k")
@@ -170,10 +172,10 @@ class VariantContract(unittest.TestCase):
         for variant in art.VARIANTS:
             driver, page = variant.split("-")
             env = dict(os.environ, OUT=str(ROOT / "_out"), TALOS_SRC=str(ROOT / (".work/talos-" + page)), TALOS_VERSION="v1.14.1", TALOS_COMMIT=art.TALOS_COMMIT,
-                       KERNEL_RELEASE="6.17.13-talos-dgx1022.6-" + page, KERNEL_CONFIG="kernel/config-" + page,
+                       KERNEL_RELEASE="6.17.13-talos-dgx1022.7-" + page, KERNEL_CONFIG="kernel/config-" + page,
                        KERNEL_PAGE_SIZE=page, DRIVER_FLAVOR=driver, VARIANT=variant, SOURCE_DATE_EPOCH="1789481248",
                        SIGNING_KEY="/dev/null", MODULE_SIGNING_CERT_SHA256="a" * 64, KBUILD_BUILD_VERSION="offline-" + page)
-            result = subprocess.run(["docker", "buildx", "bake", "--print", "kernel", "nvidia-extension", "dispram-extension"], cwd=ROOT, env=env, capture_output=True, text=True)
+            result = subprocess.run(["docker", "buildx", "bake", "--print", "kernel", "nvidia-extension", "dispram-extension", "toolkit-extension"], cwd=ROOT, env=env, capture_output=True, text=True)
             self.assertEqual(result.returncode, 0, result.stderr)
             targets = json.loads(result.stdout)["target"]
             kernels[variant] = targets["kernel"]
@@ -183,6 +185,7 @@ class VariantContract(unittest.TestCase):
             self.assertEqual(targets["nvidia-extension"]["args"]["EXTENSION_NAME"], "nvidia-open-gpu-kernel-modules-lts" if driver == "open" else "nvidia-gpu-kernel-modules-lts")
             self.assertTrue(targets["nvidia-extension"]["output"][0]["dest"].endswith("/variants/" + variant + "/nvidia-extension"))
             self.assertNotIn("secret", targets["dispram-extension"])
+            self.assertNotIn("secret", targets["toolkit-extension"])
         self.assertEqual(kernels["proprietary-4k"], kernels["open-4k"])
         self.assertNotEqual(kernels["open-4k"], kernels["open-64k"])
         env.update(VARIANT="proprietary-64k", DRIVER_FLAVOR="proprietary", KERNEL_PAGE_SIZE="64k")
@@ -215,7 +218,7 @@ class ArtifactContract(unittest.TestCase):
             records = art.verify(out)
             self.assertEqual(len(records), 3)
             self.assertEqual(len((out / "SHA256SUMS").read_text().splitlines()), 8)
-            self.assertEqual(len((out / "OCI-DIGESTS").read_text().splitlines()), 8)
+            self.assertEqual(len((out / "OCI-DIGESTS").read_text().splitlines()), 9)
             self.assertNotIn("PRIVATE KEY", (out / "VARIANTS.json").read_text())
             (out / art.artifact_names("open-4k")[0]).write_text("tampered test fixture")
             with self.assertRaisesRegex(ValueError, "Checksum mismatch"):
@@ -323,4 +326,4 @@ class ArtifactContract(unittest.TestCase):
                 self.assertEqual(len(output.call_args_list), 6)  # local digest + remote read-back per variant
                 self.assertEqual(len((out / "INSTALLER-REFS").read_text().splitlines()), 3)
             with self.assertRaisesRegex(ValueError, "only publishes"):
-                publisher.publish(out, "example.test/installer", "v1.14.1-dgx1022.5")
+                publisher.publish(out, "example.test/installer", "v1.14.1-dgx1022.6")
