@@ -35,11 +35,17 @@
  kernel/drivers/net/ethernet/stmicro/stmmac/dwmac-sun8i.ko
  kernel/drivers/net/ethernet/stmicro/stmmac/dwmac-sunxi.ko
  kernel/drivers/net/ethernet/stmicro/stmmac/dwmac-tegra.ko
-@@ -196,7 +193,6 @@
+@@ -194,13 +191,10 @@
+ kernel/drivers/net/ethernet/stmicro/stmmac/stmmac.ko
+ kernel/drivers/net/hyperv/hv_netvsc.ko
  kernel/drivers/net/ifb.ko
+-kernel/drivers/net/macsec.ko
  kernel/drivers/net/mdio.ko
  kernel/drivers/net/mdio/mdio-i2c.ko
 -kernel/drivers/net/pcs/pcs-rzn1-miic.ko
  kernel/drivers/net/pcs/pcs_xpcs.ko
  kernel/drivers/net/phy/dp83867.ko
+-kernel/drivers/net/phy/mscc/mscc.ko
  kernel/drivers/net/phy/sfp.ko
+ kernel/drivers/net/usb/r8152.ko
+ kernel/drivers/net/virtio_net.ko
