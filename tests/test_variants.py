@@ -76,7 +76,7 @@ class VariantContract(unittest.TestCase):
                      ("VARIANT=open-64k-packing-off",), ("VARIANT=../open-4k",),
                      ("VARIANT=proprietary-4k", "KERNEL_PAGE_SIZE=64k"),
                      ("VARIANT=open-64k", "KERNEL_CONFIG=kernel/config-4k"),
-                     ("VARIANT=open-4k", "KERNEL_RELEASE=6.17.13-talos-dgx1022.8-64k"),
+                     ("VARIANT=open-4k", "KERNEL_RELEASE=7.0.14-talos-dgx1019.1-64k"),
                      ("TAG=v1.14.1-dgx1022.7",)):
             with self.subTest(args=args):
                 result = make("print-variant", *args)
@@ -95,15 +95,17 @@ class VariantContract(unittest.TestCase):
         self.assertIn(".NOTPARALLEL:", (ROOT / "Makefile").read_text())
 
     def test_configs_are_exact_historical_inputs_except_release(self):
+        # Linux 7.0 baselines, first released as dgx1019.1, hashed with an empty release string.
         baselines = {
-            "4k": ("1", "3de7651cd16a4c94fe01fa725c568c55e39138a46297f755a25174e291e3c92c"),
-            "64k": ("5", "d76f5547bd84f47cfee765215316f9a42b55c0d9609c16ecf1ec959917d20bd5"),
+            "4k": "9706d694b6ff5aaccf821092a71d12e7edbae13d7f3c953239197494b4a5192e",
+            "64k": "f1f7c5c6d99a62267c705e462a17542d56943c91bae3d2f043a7f9356168077d",
         }
-        for page, (revision, expected) in baselines.items():
+        for page, expected in baselines.items():
             text = (ROOT / ("kernel/config-" + page)).read_text()
-            original = text.replace("-talos-dgx1022.8-" + page, "-talos-dgx1022." + revision)
+            self.assertIn('CONFIG_LOCALVERSION="-talos-dgx1019.1-' + page + '"\n', text)
+            original = re.sub(r'(?m)^CONFIG_LOCALVERSION=".*"$', 'CONFIG_LOCALVERSION=""', text)
             self.assertEqual(hashlib.sha256(original.encode()).hexdigest(), expected)
-            for required in ('CONFIG_MODULE_SIG_KEY="/run/secrets/module_signing_key"', "CONFIG_MODULE_SIG_SHA512=y", "CONFIG_DEBUG_INFO_BTF=y", "CONFIG_LTO_CLANG_THIN=y"):
+            for required in ('CONFIG_MODULE_SIG_KEY="/run/secrets/module_signing_key"', "CONFIG_MODULE_SIG_SHA512=y", "CONFIG_DEBUG_INFO_BTF=y", "CONFIG_LTO_CLANG_THIN=y", "CONFIG_PREEMPT_LAZY=y"):
                 self.assertIn(required, text)
         self.assertIn("CONFIG_CMA_SIZE_MBYTES=128", (ROOT / "kernel/config-4k").read_text())
         self.assertIn("CONFIG_CMA_SIZE_MBYTES=1024", (ROOT / "kernel/config-64k").read_text())
@@ -129,7 +131,7 @@ class VariantContract(unittest.TestCase):
             text = (ROOT / "extension" / variant / "manifest.yaml").read_text()
             page = art.page_of(variant)
             self.assertIn(art.TAG + "-" + variant, text)
-            self.assertIn("6.17.13-talos-dgx1022.8-" + page, text)
+            self.assertIn("7.0.14-talos-dgx1019.1-" + page, text)
             spdx = json.loads((ROOT / "extension" / variant / "nvidia.spdx.json").read_text())
             self.assertIn("-" + page, spdx["documentNamespace"])
             self.assertEqual(spdx["packages"][0]["versionInfo"], "580.178.04")
@@ -156,11 +158,11 @@ class VariantContract(unittest.TestCase):
                 source = Path(temp)
                 constant = source / "pkg/machinery/constants/constants.go"
                 constant.parent.mkdir(parents=True)
-                constant.write_text('DefaultKernelVersion = "6.18.57-talos"\n')
+                constant.write_text('DefaultKernelVersion = "6.18.55-talos"\n')
                 modules = source / "hack/modules-arm64.txt"
                 modules.parent.mkdir()
                 modules.write_text("kernel/drivers/net/vmxnet3/vmxnet3.ko\n")
-                release = "6.17.13-talos-dgx1022.8-" + page
+                release = "7.0.14-talos-dgx1019.1-" + page
                 subprocess.run([sys.executable, str(ROOT / "scripts/prepare-talos.py"), str(source), release, page], check=True)
                 self.assertIn(release, constant.read_text())
                 self.assertEqual("vmxnet3" in modules.read_text(), page == "4k")
@@ -171,9 +173,9 @@ class VariantContract(unittest.TestCase):
         env = dict(os.environ)
         for variant in art.VARIANTS:
             driver, page = variant.split("-")
-            env = dict(os.environ, OUT=str(ROOT / "_out"), TALOS_SRC=str(ROOT / (".work/talos-" + page)), TALOS_VERSION="v1.14.4", TALOS_COMMIT=art.TALOS_COMMIT,
-                       KERNEL_RELEASE="6.17.13-talos-dgx1022.8-" + page, KERNEL_CONFIG="kernel/config-" + page,
-                       KERNEL_PAGE_SIZE=page, DRIVER_FLAVOR=driver, VARIANT=variant, SOURCE_DATE_EPOCH="1792142873",
+            env = dict(os.environ, OUT=str(ROOT / "_out"), TALOS_SRC=str(ROOT / (".work/talos-" + page)), TALOS_VERSION="v1.15.0-alpha.1", TALOS_COMMIT=art.TALOS_COMMIT,
+                       KERNEL_RELEASE="7.0.14-talos-dgx1019.1-" + page, KERNEL_CONFIG="kernel/config-" + page,
+                       KERNEL_PAGE_SIZE=page, DRIVER_FLAVOR=driver, VARIANT=variant, SOURCE_DATE_EPOCH="1791868917",
                        SIGNING_KEY="/dev/null", MODULE_SIGNING_CERT_SHA256="a" * 64, KBUILD_BUILD_VERSION="offline-" + page)
             result = subprocess.run(["docker", "buildx", "bake", "--print", "kernel", "nvidia-extension", "dispram-extension", "toolkit-extension"], cwd=ROOT, env=env, capture_output=True, text=True)
             self.assertEqual(result.returncode, 0, result.stderr)

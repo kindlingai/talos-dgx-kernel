@@ -4,11 +4,11 @@ from pathlib import Path
 import sys
 
 source, release, page = sys.argv[1:]
-if page not in ("4k", "64k") or release != "6.17.13-talos-dgx1022.8-" + page:
+if page not in ("4k", "64k") or release != "7.0.14-talos-dgx1019.1-" + page:
     raise SystemExit("Unsupported kernel release/page geometry")
 constants = Path(source) / "pkg/machinery/constants/constants.go"
 text = constants.read_text()
-old = 'DefaultKernelVersion = "6.18.57-talos"'
+old = 'DefaultKernelVersion = "6.18.55-talos"'
 if text.count(old) != 1:
     raise SystemExit("Unexpected upstream DefaultKernelVersion")
 constant_text = text.replace(old, f'DefaultKernelVersion = "{release}"')

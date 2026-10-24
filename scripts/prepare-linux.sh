@@ -1,5 +1,5 @@
 #!/bin/bash
-# Unpacks the Ubuntu linux-nvidia-6.17 source into the current directory, then
+# Unpacks the Ubuntu linux-nvidia-7.0 source into the current directory, then
 # applies the Ubuntu diff and the patches listed in PATCHES/series, in order.
 #
 # Usage: prepare-linux.sh DOWNLOADS PATCHES

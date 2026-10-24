@@ -15,15 +15,15 @@ ARG TOOLKIT_IMAGE=ghcr.io/siderolabs/nvidia-container-toolkit-lts@sha256:0ad95ab
 
 # BEGIN KERNEL INPUTS
 ARG LLVM_IMAGE=ghcr.io/siderolabs/llvm@sha256:251882062d6ce367b3125bf50e64db69e42e09ddc03003d4a37b75c482f46496
-ARG TOOLS_IMAGE=ghcr.io/siderolabs/tools@sha256:ad7d2319c0c88f81da2a6ed425515ab2898d3054e0dfe63c056eb06133e2722b
+ARG TOOLS_IMAGE=ghcr.io/siderolabs/tools@sha256:353cd1149ab17021ad3fa90cbfb2031926031d2e2931578ebb0739975806970a
 
 FROM scratch AS linux-downloads
-ADD --checksum=sha256:a5623ec5af79da8807e1467e43a1888461c7a445fb1e17533fe45f0fdf4394e3 \
-    https://ports.ubuntu.com/ubuntu-ports/pool/main/l/linux-nvidia-6.17/linux-nvidia-6.17_6.17.0.orig.tar.gz /linux.tar.gz
+ADD --checksum=sha256:c6343795c8c7e4feff55f5b309365c8e0eaf49cd6abcb412e32315313f149536 \
+    https://ports.ubuntu.com/ubuntu-ports/pool/main/l/linux-nvidia-7.0/linux-nvidia-7.0_7.0.0.orig.tar.gz /linux.tar.gz
 # Launchpad serves the .diff.gz with Content-Encoding: gzip, so BuildKit receives
 # and checks the uncompressed diff.
-ADD --checksum=sha256:59db6c06597b7fe7a009da32e58f179a939109ee9b61dd041e895c3f6a4d1205 \
-    https://launchpad.net/ubuntu/+archive/primary/+sourcefiles/linux-nvidia-6.17/6.17.0-1022.22/linux-nvidia-6.17_6.17.0-1022.22.diff.gz /linux-nvidia.diff
+ADD --checksum=sha256:349d958b8ac2c8a2375e0af80e767b6e03ea5a4fb81393b201c39fff6b7fa7b6 \
+    https://launchpad.net/ubuntu/+archive/primary/+sourcefiles/linux-nvidia-7.0/7.0.0-1019.19~24.04.2/linux-nvidia-7.0_7.0.0-1019.19~24.04.2.diff.gz /linux-nvidia.diff
 
 FROM --platform=$BUILDPLATFORM ${LLVM_IMAGE} AS llvm
 
@@ -57,7 +57,7 @@ ARG TARGETARCH
 ARG KERNEL_PAGE_SIZE
 ARG KERNEL_CONFIG
 # Partition compiler caches by target, page geometry, and both toolchain pins.
-ARG TOOLCHAIN_CACHE_ID=llvm-251882062d6c-tools-ad7d2319c0c8
+ARG TOOLCHAIN_CACHE_ID=llvm-251882062d6c-tools-353cd1149ab1
 ENV THINLTO_CACHE_DIR=/var/cache/thinlto
 RUN --mount=type=bind,source=scripts/build-kernel.sh,target=/scripts/build-kernel.sh \
     --mount=type=bind,source=scripts/check-modules.sh,target=/scripts/check-modules.sh \
