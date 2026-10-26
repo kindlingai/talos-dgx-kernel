@@ -97,8 +97,8 @@ class VariantContract(unittest.TestCase):
     def test_configs_are_exact_historical_inputs_except_release(self):
         # Linux 7.0 baselines, first released as dgx1019.1, hashed with an empty release string.
         baselines = {
-            "4k": "9706d694b6ff5aaccf821092a71d12e7edbae13d7f3c953239197494b4a5192e",
-            "64k": "f1f7c5c6d99a62267c705e462a17542d56943c91bae3d2f043a7f9356168077d",
+            "4k": "e4b52cbb7c3691c443a2a8cd30121370e030208e7bf632ac73dc75b543e534fc",
+            "64k": "d9d4c9a5783e9842c0f00d7be46b68a1cc624e7ee3ab7ebb54d982a2fad31a23",
         }
         for page, expected in baselines.items():
             text = (ROOT / ("kernel/config-" + page)).read_text()
@@ -158,7 +158,7 @@ class VariantContract(unittest.TestCase):
                 source = Path(temp)
                 constant = source / "pkg/machinery/constants/constants.go"
                 constant.parent.mkdir(parents=True)
-                constant.write_text('DefaultKernelVersion = "6.18.55-talos"\n')
+                constant.write_text('DefaultKernelVersion = "7.3.0-talos"\n')
                 modules = source / "hack/modules-arm64.txt"
                 modules.parent.mkdir()
                 modules.write_text("kernel/drivers/net/vmxnet3/vmxnet3.ko\n")
@@ -173,9 +173,9 @@ class VariantContract(unittest.TestCase):
         env = dict(os.environ)
         for variant in art.VARIANTS:
             driver, page = variant.split("-")
-            env = dict(os.environ, OUT=str(ROOT / "_out"), TALOS_SRC=str(ROOT / (".work/talos-" + page)), TALOS_VERSION="v1.15.0-alpha.1", TALOS_COMMIT=art.TALOS_COMMIT,
+            env = dict(os.environ, OUT=str(ROOT / "_out"), TALOS_SRC=str(ROOT / (".work/talos-" + page)), TALOS_VERSION="v1.15.0-alpha.1-53-gedbfe07", TALOS_COMMIT=art.TALOS_COMMIT,
                        KERNEL_RELEASE="7.0.14-talos-dgx1019.1-" + page, KERNEL_CONFIG="kernel/config-" + page,
-                       KERNEL_PAGE_SIZE=page, DRIVER_FLAVOR=driver, VARIANT=variant, SOURCE_DATE_EPOCH="1791868917",
+                       KERNEL_PAGE_SIZE=page, DRIVER_FLAVOR=driver, VARIANT=variant, SOURCE_DATE_EPOCH="1793027150",
                        SIGNING_KEY="/dev/null", MODULE_SIGNING_CERT_SHA256="a" * 64, KBUILD_BUILD_VERSION="offline-" + page)
             result = subprocess.run(["docker", "buildx", "bake", "--print", "kernel", "nvidia-extension", "dispram-extension", "toolkit-extension"], cwd=ROOT, env=env, capture_output=True, text=True)
             self.assertEqual(result.returncode, 0, result.stderr)

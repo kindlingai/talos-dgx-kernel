@@ -3,13 +3,13 @@ SHELL := /bin/bash
 .DEFAULT_GOAL := all
 .NOTPARALLEL:
 
-TALOS_VERSION     := v1.15.0-alpha.1
-TALOS_COMMIT      := 63b43027679fc90af7b0d79e77ee29c47e531889
+TALOS_VERSION     := v1.15.0-alpha.1-53-gedbfe07
+TALOS_COMMIT      := edbfe07754a3dc6008cc8caa7b78782e99a81be2
 TALOS_REPOSITORY  := https://github.com/siderolabs/talos.git
-SOURCE_DATE_EPOCH := 1791868917
-TAG               := v1.15.0-alpha.1-dgx1019.1
-ifneq ($(TAG),v1.15.0-alpha.1-dgx1019.1)
-$(error This branch only publishes TAG=v1.15.0-alpha.1-dgx1019.1)
+SOURCE_DATE_EPOCH := 1793027150
+TAG               := v1.15.0-alpha.1-53-gedbfe07-dgx1019.1
+ifneq ($(TAG),v1.15.0-alpha.1-53-gedbfe07-dgx1019.1)
+$(error This branch only publishes TAG=v1.15.0-alpha.1-53-gedbfe07-dgx1019.1)
 endif
 VARIANTS          := proprietary-4k open-4k open-64k
 VARIANT           ?= open-64k

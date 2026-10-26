@@ -8,7 +8,7 @@ if page not in ("4k", "64k") or release != "7.0.14-talos-dgx1019.1-" + page:
     raise SystemExit("Unsupported kernel release/page geometry")
 constants = Path(source) / "pkg/machinery/constants/constants.go"
 text = constants.read_text()
-old = 'DefaultKernelVersion = "6.18.55-talos"'
+old = 'DefaultKernelVersion = "7.3.0-talos"'
 if text.count(old) != 1:
     raise SystemExit("Unexpected upstream DefaultKernelVersion")
 constant_text = text.replace(old, f'DefaultKernelVersion = "{release}"')

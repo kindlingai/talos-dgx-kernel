@@ -11,11 +11,11 @@
 # docker-bake.hcl supplies the build arguments and the module signing key.
 
 ARG VALIDATOR_IMAGE=ghcr.io/siderolabs/extensions-validator@sha256:3737c0e2f22e66382bddcdaab61e305eae453913ad3ba9b6096e96647daae800
-ARG TOOLKIT_IMAGE=ghcr.io/siderolabs/nvidia-container-toolkit-lts@sha256:0ad95abe15402c9bcd21600079c46f2f14263cf469d1a5385d29417ddf03d001
+ARG TOOLKIT_IMAGE=ghcr.io/siderolabs/nvidia-container-toolkit-lts@sha256:ee78d32033545f84e199a22be50c774c58ca83feb7e6ff662d709742e5a97a99
 
 # BEGIN KERNEL INPUTS
-ARG LLVM_IMAGE=ghcr.io/siderolabs/llvm@sha256:251882062d6ce367b3125bf50e64db69e42e09ddc03003d4a37b75c482f46496
-ARG TOOLS_IMAGE=ghcr.io/siderolabs/tools@sha256:353cd1149ab17021ad3fa90cbfb2031926031d2e2931578ebb0739975806970a
+ARG LLVM_IMAGE=ghcr.io/siderolabs/llvm@sha256:f2f204ef11a46e2305b7385332c56aedfcd29a13a488cbb82206734f0161a39f
+ARG TOOLS_IMAGE=ghcr.io/siderolabs/tools@sha256:92cf7385e9f0b24f7690217796f5646bb685b0a0423dd2ff5d4181330f8b1f26
 
 FROM scratch AS linux-downloads
 ADD --checksum=sha256:c6343795c8c7e4feff55f5b309365c8e0eaf49cd6abcb412e32315313f149536 \
@@ -57,7 +57,7 @@ ARG TARGETARCH
 ARG KERNEL_PAGE_SIZE
 ARG KERNEL_CONFIG
 # Partition compiler caches by target, page geometry, and both toolchain pins.
-ARG TOOLCHAIN_CACHE_ID=llvm-251882062d6c-tools-353cd1149ab1
+ARG TOOLCHAIN_CACHE_ID=llvm-f2f204ef11a4-tools-92cf7385e9f0
 ENV THINLTO_CACHE_DIR=/var/cache/thinlto
 RUN --mount=type=bind,source=scripts/build-kernel.sh,target=/scripts/build-kernel.sh \
     --mount=type=bind,source=scripts/check-modules.sh,target=/scripts/check-modules.sh \

@@ -1,18 +1,26 @@
 # Talos DGX kernel
 
-Talos **v1.15.0-alpha.1** for NVIDIA DGX Spark (arm64), release
-**v1.15.0-alpha.1-dgx1019.1**. Linux moves from Ubuntu `linux-nvidia-6.17`
+Talos **main at `edbfe07`** (`v1.15.0-alpha.1-53-gedbfe07`, 2026-10-26) for NVIDIA
+DGX Spark (arm64), release **v1.15.0-alpha.1-53-gedbfe07-dgx1019.1**. Linux moves from Ubuntu `linux-nvidia-6.17`
 6.17.0-1022.22 (6.17.13) to `linux-nvidia-7.0` 7.0.0-1019.19~24.04.2 (**7.0.14**),
 the current noble-updates/security upload, plus the pinned `kernel/patches/series`.
 NVIDIA stays **580.178.04** and GPUDirect Storage stays **2.29.4**: Ubuntu's
 `linux-restricted-modules-nvidia-7.0` builds exactly these against this kernel,
 with no kernel compatibility patches. The toolchain, security config, BTF, and
-signing checks remain enabled. Talos package and tools pins follow upstream
-(`v1.15.0-alpha.0-52-g305b1b6` / `v1.15.0-alpha.0-12-g32e115c`). LLVM is unchanged
-(clang 22.1.8, same digest); the kernel's Sidero tools image moves to the 1.15 pin.
+signing checks remain enabled. Talos package and tools pins follow upstream main
+(`v1.15.0-alpha.0-62-g2c33dc1` / `v1.15.0-alpha.0-15-g2d70a26`), and the kernel is
+compiled with the same Sidero LLVM and tools images (**clang 23.1.3**). The toolkit
+extension base follows Sidero's current `nvidia-container-toolkit-lts:580.178.04-v1.19.1`
+image, whose service definitions are unchanged.
 
-Talos v1.15 is still a **pre-release**. Rebase onto v1.15.0 before publishing a
-non-alpha tag.
+Upstream Talos main ships Linux 7.3; this release keeps Ubuntu's 7.0 kernel. Main's
+kernel-facing changes work with it: its SELinux policy capabilities (`memfd_class`,
+`bpf_token_perms`) exist in 7.0, and on-demand module loading uses the same
+`CONFIG_MODPROBE_PATH=""` plus static usermode helper that our configs already set.
+`bonding` stays built in, so `bond0` exists before Talos would load it.
+
+Talos v1.15 is still a **pre-release** and this pin is an untagged main commit.
+Rebase onto v1.15.0 before publishing a non-alpha tag.
 
 Kernel patches dropped because Linux 7.0 or the Ubuntu 7.0.0-1019 diff already
 contains them: the PCI bridge-window fix, every libceph and arm64 GCS/probe
@@ -176,13 +184,18 @@ successful cache-commit log in real CI.
 ### Talos source adaptation
 
 Each page size gets a separate checkout of pinned Talos commit
-`63b43027679fc90af7b0d79e77ee29c47e531889` (v1.15.0-alpha.1) under `.work/talos-<page>`.
-`talos/source.patch` applies common initramfs module-list changes: add `r8127`;
-remove `macsec` and `mscc` (the configs leave `CONFIG_MACSEC` unset and build
-`CONFIG_MICROSEMI_PHY` in). It also removes v1.15's Apple Silicon drivers, which
-the configs do not build, and the IPVS modules, which they build in. Under 7.0,
-`hkdf`, `libeth_xdp`, `libie_fwlog`, `dwmac-sun55i`, and `pcs-rzn1-miic` are real
-modules again, so the list keeps them.
+`edbfe07754a3dc6008cc8caa7b78782e99a81be2` (v1.15.0-alpha.1-53-gedbfe07) under
+`.work/talos-<page>`. Upstream's arm64 initramfs list now targets Linux 7.3, so
+`talos/source.patch` maps it back to what the 7.0 configs build:
+
+- add `r8127`; remove `macsec` and `mscc` (`CONFIG_MACSEC` unset,
+  `CONFIG_MICROSEMI_PHY` built in), the Apple Silicon drivers (not built), and
+  `bonding` and IPVS (built in);
+- remove 7.3-only modules: `ghes-nvidia`, `ib_uverbs_support`, `libie_cp`,
+  `libie_pci`, and the `lib/raid/{raid6,xor}` paths;
+- restore 7.0 modules that 7.3 moved or removed: `arch/arm64/lib/xor-neon`,
+  `crypto/xor`, `crypto/hkdf`, `lib/raid6/raid6_pq` (RAID456 dependencies),
+  `drm_vram_helper` (needed by `hibmc-drm`), and `openvswitch/vport-gre`.
 `scripts/prepare-talos.py` then sets the exact page-qualified
 `DefaultKernelVersion`. It retains `vmxnet3` for 4 KiB and removes it for 64 KiB,
 matching the actual kernel configs. Upstream constant/list mismatches fail closed.
@@ -221,10 +234,10 @@ Local OCI layouts are kept separately:
 `uname -v` begins with the kernel input fingerprint. The hash covers the selected
 config, kernel patches, marked Linux Dockerfile stages/frontend pin, and kernel
 scripts. It excludes module and installer packaging. Kernel releases explicitly
-end in `-4k` or `-64k`; the release tag is explicitly `v1.15.0-alpha.1-dgx1019.1`, never
+end in `-4k` or `-64k`; the release tag is explicitly `v1.15.0-alpha.1-53-gedbfe07-dgx1019.1`, never
 derived from the final kernel-release component.
 
-`SOURCE_DATE_EPOCH` is the Talos v1.15.0-alpha.1 commit time (`1791868917`). The
+`SOURCE_DATE_EPOCH` is the Talos v1.15.0-alpha.1 commit time (`1793027150`). The
 v1.15.0-alpha.1 imager applies it to installer image creation time and rebuilt extension archive
 mtimes; byte-identical installers and ISOs across runs are not yet verified.
 `SHA256SUMS` identifies one run's exact files; compare `OCI-DIGESTS` between runs
@@ -234,7 +247,7 @@ for reproducibility. Existing releases are not replaced by newly timed tarballs.
 
 - Manual **branch** dispatch of `build.yaml` builds all choices and uploads the
   nine release assets. It does **not** publish.
-- Pushing the explicit `v1.15.0-alpha.1-dgx1019.1` tag starts the same build, creates a GitHub
+- Pushing the explicit `v1.15.0-alpha.1-53-gedbfe07-dgx1019.1` tag starts the same build, creates a GitHub
   release if absent, and calls `publish.yaml` once. The tag need not be on `main`.
 - If the release already exists, CI compares its `OCI-DIGESTS` and uses the
   existing release artifacts. It does not overwrite them.
@@ -250,9 +263,9 @@ for reproducibility. Existing releases are not replaced by newly timed tarballs.
 The image tags are:
 
 ```text
-ghcr.io/kindlingai/talos-dgx-kernel/installer:v1.15.0-alpha.1-dgx1019.1-proprietary-4k
-ghcr.io/kindlingai/talos-dgx-kernel/installer:v1.15.0-alpha.1-dgx1019.1-open-4k
-ghcr.io/kindlingai/talos-dgx-kernel/installer:v1.15.0-alpha.1-dgx1019.1-open-64k
+ghcr.io/kindlingai/talos-dgx-kernel/installer:v1.15.0-alpha.1-53-gedbfe07-dgx1019.1-proprietary-4k
+ghcr.io/kindlingai/talos-dgx-kernel/installer:v1.15.0-alpha.1-53-gedbfe07-dgx1019.1-open-4k
+ghcr.io/kindlingai/talos-dgx-kernel/installer:v1.15.0-alpha.1-53-gedbfe07-dgx1019.1-open-64k
 ```
 
 There is **no unsuffixed alias**. Existing `dgx1022.*` tags are outside this branch's
@@ -269,7 +282,7 @@ Choose the matching ISO or installer tag, then pin the published image digest in
 ```yaml
 machine:
   install:
-    image: ghcr.io/kindlingai/talos-dgx-kernel/installer:v1.15.0-alpha.1-dgx1019.1-open-64k@sha256:<published-digest>
+    image: ghcr.io/kindlingai/talos-dgx-kernel/installer:v1.15.0-alpha.1-53-gedbfe07-dgx1019.1-open-64k@sha256:<published-digest>
 ```
 
 When packages are private, configure `machine.registries.config` credentials.

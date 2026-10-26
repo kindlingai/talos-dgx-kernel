@@ -24,7 +24,7 @@ jobs:
 
       - name: Validate release tag
         if: github.ref_type == 'tag'
-        run: test "${GITHUB_REF_NAME}" = v1.15.0-alpha.1-dgx1019.1
+        run: test "${GITHUB_REF_NAME}" = v1.15.0-alpha.1-53-gedbfe07-dgx1019.1
 
       - name: Set up persisted Blacksmith builder
         uses: useblacksmith/setup-docker-builder@19215110ab936351210feebdfa5b440b4493e184 # v2.2.0 (v2)
