@@ -54,17 +54,24 @@ BAKE := docker buildx bake --builder $(BUILDER) --progress $(PROGRESS) --allow f
 IMAGER_RUN := docker run --rm -i --env SOURCE_DATE_EPOCH \
 	--volume $(OUT)/oci:/oci:ro --volume $(VARIANT_OUT):/out $(IMAGER) - --output /out
 
-.PHONY: all variant package builder signing-key check-signing-key kernel dispram toolkit talos-source talos installer iso push release test cache-usage print-variant verify
+.PHONY: all page finalize variant package builder signing-key check-signing-key kernel dispram toolkit talos-source talos installer iso push release test cache-usage print-variant verify
 
 # Intentionally ordered even under make -j: no dual 16-worker Linux compiles.
 all:
+	$(MAKE) page PAGE=4k
+	$(MAKE) page PAGE=64k
+	$(MAKE) finalize
+
+# Every variant of one page size. CI builds each page size on its own runner.
+page:
+	@case "$(PAGE)" in 4k|64k) ;; *) echo "Unsupported PAGE=$(PAGE); choose 4k or 64k" >&2; exit 1;; esac
 	$(MAKE) dispram
 	$(MAKE) toolkit
-	$(MAKE) talos VARIANT=open-4k
-	$(MAKE) package VARIANT=proprietary-4k
-	$(MAKE) package VARIANT=open-4k
-	$(MAKE) talos VARIANT=open-64k
-	$(MAKE) package VARIANT=open-64k
+	$(MAKE) talos VARIANT=open-$(PAGE)
+	for variant in $(filter %-$(PAGE),$(VARIANTS)); do $(MAKE) package VARIANT=$$variant || exit; done
+
+# Needs the packaged outputs of both page sizes in OUT.
+finalize:
 	python3 scripts/artifacts.py finalize $(OUT)
 	$(MAKE) verify
 
