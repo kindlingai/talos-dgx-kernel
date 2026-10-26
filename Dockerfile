@@ -11,7 +11,7 @@
 # docker-bake.hcl supplies the build arguments and the module signing key.
 
 ARG VALIDATOR_IMAGE=ghcr.io/siderolabs/extensions-validator@sha256:3737c0e2f22e66382bddcdaab61e305eae453913ad3ba9b6096e96647daae800
-ARG TOOLKIT_IMAGE=ghcr.io/siderolabs/nvidia-container-toolkit-lts@sha256:0ad95abe15402c9bcd21600079c46f2f14263cf469d1a5385d29417ddf03d001
+ARG TOOLKIT_IMAGE=ghcr.io/siderolabs/nvidia-container-toolkit-lts@sha256:ee78d32033545f84e199a22be50c774c58ca83feb7e6ff662d709742e5a97a99
 
 # BEGIN KERNEL INPUTS
 ARG LLVM_IMAGE=ghcr.io/siderolabs/llvm@sha256:251882062d6ce367b3125bf50e64db69e42e09ddc03003d4a37b75c482f46496
