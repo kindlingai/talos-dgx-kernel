@@ -90,7 +90,7 @@ class CacheContract(unittest.TestCase):
     def test_ci_persists_layers_and_cache_mounts(self):
         ci = (ROOT / ".github/workflows/build.yaml").read_text()
         self.assertIn("useblacksmith/setup-docker-builder@19215110ab936351210feebdfa5b440b4493e184", ci)
-        self.assertIn("cache-key: talos-dgx-arm64-buildkit-v1", ci)
+        self.assertIn("cache-key: talos-dgx-arm64-buildkit-v1-${{ matrix.page }}", ci)
         self.assertIn("nofallback: true", ci)
         self.assertIn("REQUIRE_EXISTING_BUILDER=true", ci)
         self.assertIn("buildkit-version: v0.33.1", ci)

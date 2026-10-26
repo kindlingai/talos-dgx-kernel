@@ -1,6 +1,7 @@
 name: build
 
-# Builds all three variants sequentially. Linux and Talos are shared by page size.
+# Builds each page size on its own runner: 4 KiB (proprietary-4k, open-4k share one
+# kernel) and 64 KiB (open-64k). assemble then records and verifies all three variants.
 # A tag publishes the verified release then calls publish.yaml exactly once.
 # Manual branch dispatch builds and uploads artifacts, without publishing.
 on:
@@ -17,8 +18,13 @@ concurrency:
 
 jobs:
   build:
+    strategy:
+      # Let the other page size finish, so only the failed one needs re-running.
+      fail-fast: false
+      matrix:
+        page: [4k, 64k]
     runs-on: blacksmith-16vcpu-ubuntu-2404-arm
-    timeout-minutes: 360
+    timeout-minutes: 180
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
@@ -26,10 +32,11 @@ jobs:
         if: github.ref_type == 'tag'
         run: test "${GITHUB_REF_NAME}" = v1.14.5-dgx1022.10
 
+      # One persisted builder per page size, so concurrent jobs never share a cache disk.
       - name: Set up persisted Blacksmith builder
         uses: useblacksmith/setup-docker-builder@19215110ab936351210feebdfa5b440b4493e184 # v2.2.0 (v2)
         with:
-          cache-key: talos-dgx-arm64-buildkit-v1
+          cache-key: talos-dgx-arm64-buildkit-v1-${{ matrix.page }}
           buildx-version: v0.37.1
           buildkit-version: v0.33.1
           platforms: linux/arm64
@@ -65,7 +72,7 @@ jobs:
           printf '%s\n' "${MODULE_SIGNING_KEY}" > "${RUNNER_TEMP}/module-signing.pem"
 
       - name: Build
-        run: make PROGRESS=plain SIGNING_KEY="${RUNNER_TEMP}/module-signing.pem"
+        run: make page PAGE=${{ matrix.page }} PROGRESS=plain SIGNING_KEY="${RUNNER_TEMP}/module-signing.pem"
 
       - name: Cache usage after build
         if: always() && env.BUILDER != ''
@@ -74,6 +81,33 @@ jobs:
       - name: Remove signing secret from runner
         if: always()
         run: rm -f "${RUNNER_TEMP}/module-signing.pem"
+
+      # Intermediate handoff to assemble; download the talos-dgx-kernel artifact instead.
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: page-${{ matrix.page }}
+          path: |
+            _out/installer-arm64-*.tar
+            _out/metal-arm64-*.iso
+            _out/variants/*/provenance.json
+          if-no-files-found: error
+          retention-days: 7
+
+  assemble:
+    needs: build
+    runs-on: blacksmith-2vcpu-ubuntu-2404-arm
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          pattern: page-*
+          merge-multiple: true
+          path: _out
+
+      - name: Record and verify all variants
+        run: make finalize
 
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
@@ -102,7 +136,7 @@ jobs:
           fi
 
   publish:
-    needs: build
+    needs: assemble
     if: github.ref_type == 'tag'
     uses: ./.github/workflows/publish.yaml
     with:

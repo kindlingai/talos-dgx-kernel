@@ -96,13 +96,15 @@ pages need compatible builds. Recreate swap areas under the selected kernel.
 Requirements: Docker with buildx, GNU Make, Bash, Git, OpenSSL, and Python 3.
 The build uses all builder CPUs; allow sufficient memory for BTF and disk for
 both complete Kbuild trees, Talos builds, OCI exports, and all six boot artifacts.
-CI uses the existing 16-vCPU Blacksmith arm64 runner and a 360-minute limit.
+CI builds each page size on its own 16-vCPU Blacksmith arm64 runner, in parallel,
+with a 180-minute limit per page size.
 
 Use the **existing trusted module signing key**, not a fresh key for each variant:
 
 ```sh
 make SIGNING_KEY=/secure/path/module-signing.pem    # all three choices
 make variant VARIANT=open-4k SIGNING_KEY=/secure/path/module-signing.pem
+make page PAGE=4k SIGNING_KEY=/secure/path/module-signing.pem  # one page size, as CI
 make test                                         # offline contracts, no compilation
 make print-variant VARIANT=proprietary-4k
 ```
@@ -113,15 +115,18 @@ uses a mode-0600 temporary file, and removes it afterward. The key is never copi
 into a layer, compiler cache, or uploaded artifact. `CONFIG_MODULE_SIG_KEY` stays
 `/run/secrets/module_signing_key`. All kernel, NVIDIA, and GDS modules use it.
 
-`make` runs these stages in order, even under `make -j`:
+`make` runs `make page PAGE=4k`, then `make page PAGE=64k`, then `make finalize`,
+in order, even under `make -j`:
 
-1. Build the common dispram and nvidia-container-toolkit-lts extensions.
-2. Build/export the 4 KiB kernel and its Talos installer base/imager.
-3. Package the proprietary 4 KiB extension, installer, and ISO.
-4. Package the open 4 KiB extension, installer, and ISO using the same kernel export.
-5. Build/export the 64 KiB kernel and its Talos installer base/imager.
-6. Package the open 64 KiB extension, installer, and ISO.
-7. Record provenance and verify the complete artifact/checksum matrix.
+1. `page` builds the common dispram and nvidia-container-toolkit-lts extensions.
+2. It builds/exports that page size's kernel and its Talos installer base/imager.
+3. It packages each of that page size's variants: proprietary then open for 4 KiB,
+   sharing one kernel export; open only for 64 KiB.
+4. `finalize` records provenance and verifies the complete artifact/checksum matrix.
+
+`finalize` only needs the six artifacts and each variant's `provenance.json` in
+`_out`, which is what each CI page job hands to the `assemble` job. Both page sizes
+build the common extensions; `finalize` requires their OCI digests to match.
 
 `make kernel VARIANT=...` and `make talos VARIANT=...` are bounded intermediate
 steps. `package`, `installer`, and `iso` are internal assembly steps, not standalone
@@ -130,11 +135,12 @@ changed signing certificate. No automatic whole-checkout cleanup is performed.
 
 ### Persistent compiler reuse
 
-CI pins Blacksmith `setup-docker-builder` v2.2.0 by commit and uses the stable
-`talos-dgx-arm64-buildkit-v1` cache key with `nofallback: true`. BuildKit remains
-v0.33.1; the local builder retains its existing digest pin. The action selects a
-remote builder, which Make uses directly. CI verifies its name, driver, and
-`/var/lib/buildkit` mount; Make refuses to create a substitute builder.
+CI pins Blacksmith `setup-docker-builder` v2.2.0 by commit and uses one stable
+cache key per page size, `talos-dgx-arm64-buildkit-v1-4k` and `-64k`, with
+`nofallback: true`, so the concurrent page jobs never share a cache disk.
+BuildKit remains v0.33.1; the local builder retains its existing digest pin. The
+action selects a remote builder, which Make uses directly. CI verifies its name,
+driver, and `/var/lib/buildkit` mount; Make refuses to create a substitute builder.
 
 Blacksmith persists **layers and cache mounts** after successful jobs. The first
 run is cold, and failed jobs do not commit new cache state. The immutable
@@ -217,6 +223,9 @@ for reproducibility. Existing releases are not replaced by newly timed tarballs.
 
 ## CI and publication
 
+- `build.yaml` builds the 4 KiB and 64 KiB page sizes in parallel jobs. Each uploads
+  its installers, ISOs, and provenance; `assemble` downloads both, then runs
+  `make finalize`. A failed page size can be re-run alone.
 - Manual **branch** dispatch of `build.yaml` builds all choices and uploads the
   nine release assets. It does **not** publish.
 - Pushing the explicit `.10` version tag starts the same build, creates a GitHub
