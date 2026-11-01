@@ -85,13 +85,25 @@ class VariantContract(unittest.TestCase):
         for variant in (*art.VARIANTS, "proprietary-64k", "open-16k"):
             result = subprocess.run(["bash", str(ROOT / "scripts/validate-variant.sh"), *variant.split("-")], capture_output=True)
             self.assertEqual(result.returncode == 0, variant in art.VARIANTS)
+        with tempfile.TemporaryDirectory() as temp:
+            docker = Path(temp) / "docker"
+            docker.write_text("#!/bin/sh\nexit 1\n")
+            docker.chmod(0o755)
+            env = dict(os.environ, PATH=temp + os.pathsep + os.environ["PATH"])
+            for page in ("16k", "", "4k 64k", "../4k"):
+                with self.subTest(page=page):
+                    result = subprocess.run(["make", "--no-print-directory", "page", "PAGE=" + page], cwd=ROOT, env=env, capture_output=True, text=True)
+                    self.assertNotEqual(result.returncode, 0)
+                    self.assertIn("Unsupported PAGE", result.stderr)
 
     def test_ordered_build_graph_builds_linux_twice_not_three_times(self):
         result = make("-n", "all", "SIGNING_KEY=/dev/null")
         self.assertEqual(result.returncode, 0, result.stderr)
         lines = [line for line in result.stdout.splitlines() if line.startswith("docker buildx bake")]
         targets = [line.split()[-1] for line in lines]
-        self.assertEqual(targets, ["dispram-extension", "toolkit-extension", "kernel", "talos", "nvidia-extension", "nvidia-extension", "kernel", "talos", "nvidia-extension"])
+        page = ["dispram-extension", "toolkit-extension", "kernel", "talos"]
+        self.assertEqual(targets, page + ["nvidia-extension", "nvidia-extension"] + page + ["nvidia-extension"])
+        self.assertTrue(result.stdout.rstrip().endswith("python3 scripts/artifacts.py verify " + str(ROOT / "_out")))
         self.assertIn(".NOTPARALLEL:", (ROOT / "Makefile").read_text())
 
     def test_configs_are_exact_historical_inputs_except_release(self):
@@ -211,6 +223,26 @@ class VariantContract(unittest.TestCase):
 
 
 class ArtifactContract(unittest.TestCase):
+    def test_page_jobs_hand_assemble_everything_finalize_needs(self):
+        build = (ROOT / ".github/workflows/build.yaml").read_text()
+        self.assertIn("page: [4k, 64k]", build)
+        self.assertIn("make page PAGE=${{ matrix.page }}", build)
+        self.assertRegex(build, r"(?m)^  assemble:\n    needs: build$")
+        self.assertRegex(build, r"(?m)^  publish:\n    needs: assemble$")
+        self.assertIn("make finalize", build.split("\n  assemble:\n")[1])
+        uploaded = re.search(r"name: page-\$\{\{ matrix.page \}\}\n +path: \|\n((?: +_out/\S+\n)+)", build)
+        assert uploaded is not None
+        with tempfile.TemporaryDirectory() as temp:
+            built, assembled = Path(temp) / "built", Path(temp) / "assembled"
+            fixture_release(built)
+            for pattern in uploaded[1].split():
+                for path in built.glob(pattern.removeprefix("_out/")):
+                    (assembled / path.relative_to(built)).parent.mkdir(parents=True, exist_ok=True)
+                    shutil.copy(path, assembled / path.relative_to(built))
+            art.finalize(assembled)
+            self.assertEqual(len(art.verify(assembled)), 3)
+            self.assertEqual((assembled / "SHA256SUMS").read_text(), (built / "SHA256SUMS").read_text())
+
     def test_full_matrix_checksums_and_provenance_roundtrip(self):
         with tempfile.TemporaryDirectory() as temp:
             out = Path(temp)
