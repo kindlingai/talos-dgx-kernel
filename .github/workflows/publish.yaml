@@ -32,7 +32,7 @@ jobs:
       GH_REPO: ${{ github.repository }}
     steps:
       - name: Validate publication scope
-        run: test "${TAG}" = v1.14.5-dgx1022.10
+        run: test "${TAG}" = v1.14.5-dgx1022.11
 
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:

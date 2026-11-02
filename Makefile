@@ -1,4 +1,4 @@
-# Build every supported .10 installer sequentially; Linux is built once per page size.
+# Build every supported dgx1022.11 installer sequentially; Linux is built once per page size.
 SHELL := /bin/bash
 .DEFAULT_GOAL := all
 .NOTPARALLEL:
@@ -7,9 +7,9 @@ TALOS_VERSION     := v1.14.5
 TALOS_COMMIT      := dad8d3edfe7ca381044d7cad259fdf3030efa700
 TALOS_REPOSITORY  := https://github.com/siderolabs/talos.git
 SOURCE_DATE_EPOCH := 1793020251
-TAG               := v1.14.5-dgx1022.10
-ifneq ($(TAG),v1.14.5-dgx1022.10)
-$(error This branch only publishes TAG=v1.14.5-dgx1022.10)
+TAG               := v1.14.5-dgx1022.11
+ifneq ($(TAG),v1.14.5-dgx1022.11)
+$(error This branch only publishes TAG=v1.14.5-dgx1022.11)
 endif
 VARIANTS          := proprietary-4k open-4k open-64k
 VARIANT           ?= open-64k
@@ -18,12 +18,12 @@ $(error Unsupported VARIANT=$(VARIANT); choose $(VARIANTS))
 endif
 DRIVER_FLAVOR     := $(firstword $(subst -, ,$(VARIANT)))
 KERNEL_PAGE_SIZE  := $(lastword $(subst -, ,$(VARIANT)))
-KERNEL_RELEASE    := 6.17.13-talos-dgx1022.10-$(KERNEL_PAGE_SIZE)
+KERNEL_RELEASE    := 6.18.58-talos-dgx1022.11-$(KERNEL_PAGE_SIZE)
 KERNEL_CONFIG     := kernel/config-$(KERNEL_PAGE_SIZE)
 ifneq ($(DRIVER_FLAVOR)-$(KERNEL_PAGE_SIZE),$(VARIANT))
 $(error DRIVER_FLAVOR/KERNEL_PAGE_SIZE contradict VARIANT)
 endif
-ifneq ($(KERNEL_RELEASE),6.17.13-talos-dgx1022.10-$(KERNEL_PAGE_SIZE))
+ifneq ($(KERNEL_RELEASE),6.18.58-talos-dgx1022.11-$(KERNEL_PAGE_SIZE))
 $(error KERNEL_RELEASE contradicts page geometry)
 endif
 ifneq ($(KERNEL_CONFIG),kernel/config-$(KERNEL_PAGE_SIZE))
@@ -106,12 +106,11 @@ toolkit: builder
 	$(BAKE) toolkit-extension
 
 talos-source: $(TALOS_SRC)/.git/talos-dgx-kernel-$(TALOS_COMMIT)-$(KERNEL_RELEASE)
-$(TALOS_SRC)/.git/talos-dgx-kernel-$(TALOS_COMMIT)-$(KERNEL_RELEASE): talos/source.patch scripts/prepare-talos.py
+$(TALOS_SRC)/.git/talos-dgx-kernel-$(TALOS_COMMIT)-$(KERNEL_RELEASE): scripts/prepare-talos.py
 	rm -rf $(TALOS_SRC)
 	git init -q $(TALOS_SRC)
 	git -C $(TALOS_SRC) fetch -q --depth=1 $(TALOS_REPOSITORY) $(TALOS_COMMIT)
 	git -C $(TALOS_SRC) -c advice.detachedHead=false checkout -q FETCH_HEAD
-	git -C $(TALOS_SRC) apply $(CURDIR)/talos/source.patch
 	python3 scripts/prepare-talos.py $(TALOS_SRC) $(KERNEL_RELEASE) $(KERNEL_PAGE_SIZE)
 	touch $@
 

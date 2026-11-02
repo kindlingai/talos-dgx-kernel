@@ -13,7 +13,7 @@ def fingerprint(root, config):
     digest.update((dockerfile.splitlines()[0] + "\n" + compile_stages).encode())
     paths = [config, "scripts/kernel-fingerprint.py", "scripts/prepare-linux.sh",
              "scripts/build-kernel.sh", "scripts/check-modules.sh", "scripts/signing-key-id.sh"]
-    paths += [str(path.relative_to(root)) for path in sorted((root / "kernel/patches").iterdir()) if path.is_file()]
+    paths += [str(path.relative_to(root)) for path in sorted((root / "kernel/patches").glob("*.patch"))]
     for name in paths:
         digest.update(name.encode() + b"\0" + (root / name).read_bytes() + b"\0")
     return digest.hexdigest()[:12]

@@ -17,13 +17,13 @@ ARG TOOLKIT_IMAGE=ghcr.io/siderolabs/nvidia-container-toolkit-lts@sha256:ee78d32
 ARG LLVM_IMAGE=ghcr.io/siderolabs/llvm@sha256:251882062d6ce367b3125bf50e64db69e42e09ddc03003d4a37b75c482f46496
 ARG TOOLS_IMAGE=ghcr.io/siderolabs/tools@sha256:ad7d2319c0c88f81da2a6ed425515ab2898d3054e0dfe63c056eb06133e2722b
 
+# Talos v1.14.5 builds kernel.org 6.18.58 with the siderolabs/pkgs release-1.14
+# patches at f4bda77 (PKGS v1.14.0-48-gf4bda77). kernel/patches adds ours on top.
 FROM scratch AS linux-downloads
-ADD --checksum=sha256:a5623ec5af79da8807e1467e43a1888461c7a445fb1e17533fe45f0fdf4394e3 \
-    https://ports.ubuntu.com/ubuntu-ports/pool/main/l/linux-nvidia-6.17/linux-nvidia-6.17_6.17.0.orig.tar.gz /linux.tar.gz
-# Launchpad serves the .diff.gz with Content-Encoding: gzip, so BuildKit receives
-# and checks the uncompressed diff.
-ADD --checksum=sha256:59db6c06597b7fe7a009da32e58f179a939109ee9b61dd041e895c3f6a4d1205 \
-    https://launchpad.net/ubuntu/+archive/primary/+sourcefiles/linux-nvidia-6.17/6.17.0-1022.22/linux-nvidia-6.17_6.17.0-1022.22.diff.gz /linux-nvidia.diff
+ADD --checksum=sha256:069b19f9032c4dac8149ae4b6520c35debca0f42a9f6d52ee55ba6ca9b818013 \
+    https://cdn.kernel.org/pub/linux/kernel/v6.x/linux-6.18.58.tar.xz /linux.tar.xz
+ADD --checksum=f4bda77bb9f8202cac8443a7284ce1c7aa129f38 \
+    https://github.com/siderolabs/pkgs.git#f4bda77bb9f8202cac8443a7284ce1c7aa129f38:kernel/build/patches /talos-patches
 
 FROM --platform=$BUILDPLATFORM ${LLVM_IMAGE} AS llvm
 

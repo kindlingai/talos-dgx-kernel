@@ -1,37 +1,42 @@
 # Talos DGX kernel
 
-Talos **v1.14.5** for NVIDIA DGX Spark (arm64), release **v1.14.5-dgx1022.10**.
-Linux sources remain Ubuntu `linux-nvidia-6.17` 6.17.0-1022.22 plus the pinned
-`kernel/patches/series`, including `.9`'s CVE-2026-74580 and CVE-2026-99999
-backports. NVIDIA stays **580.178.04** and GPUDirect Storage stays **2.29.4**.
-The toolchain, security config, BTF, and signing checks remain enabled.
-`.10` rebases `.9` on Talos v1.14.5 and siderolabs/extensions v1.14.5:
+Talos **v1.14.5** for NVIDIA DGX Spark (arm64), release **v1.14.5-dgx1022.11**.
+Linux is Talos v1.14.5's own kernel, unmodified: kernel.org **6.18.58** with the
+siderolabs/pkgs `release-1.14` patches at `f4bda77` (PKGS `v1.14.0-48-gf4bda77`).
+`kernel/patches/` is empty. Only the kernel config differs from stock Talos (see
+[Kernel config policy](#kernel-config-policy)). NVIDIA stays **580.178.04** and
+GPUDirect Storage stays **2.29.4**. The toolchain, security config, BTF, and
+signing checks remain enabled.
 
-- **Talos v1.14.5** (`dad8d3e`), with PKGS `v1.14.0-48-gf4bda77` and TOOLS
-  `v1.14.0-11-g8dad45e`, every image re-pinned by index digest. v1.14.5 loads
-  kernel modules on demand through the static usermode helper. Our configs already
-  match what it requires: `CONFIG_MODPROBE_PATH=""` and
-  `CONFIG_STATIC_USERMODEHELPER_PATH="/sbin/init"`.
-- **nvidia-container-toolkit-lts** re-pinned to the extensions v1.14.5 build
-  (`580.178.04-v1.19.1`, unchanged version). Its service definitions are
-  identical, so the toolkit fixes below apply unchanged.
+`.11` replaces the Ubuntu `linux-nvidia-6.17` 6.17.0-1022.22 base used through
+`.10`. Ubuntu ended that branch in August 2026, so it no longer receives security
+fixes; Talos's 6.18 LTS kernel does. The rest of the Ubuntu diff, the 22 Ubuntu-era
+kernel patches (both `.9` CVE fixes are already in 6.18.58), the out-of-tree `r8127`
+driver (6.18.58's `r8169` drives the RTL8127A), and `talos/source.patch` are gone.
+The `dgx1022` series name is kept for continuity; it no longer refers to the Ubuntu ABI.
 
-Kernel config, kernel patches, driver sources, and `talos/source.patch` are
-unchanged apart from the release string.
+Measured on spark-3 against `.10` and stock Talos v1.14.5 (open-64k, vLLM
+Qwen3.8-Flash-Next-NVFP4, two power-cycled boots each, sparkDash/RigMark/rothgar;
+vault note "Spark-3 Kernel AB Results"): this build decodes within -2.4% to +4.1% of
+`.10` and 8.9-16.2% faster than stock Talos on all 14 decode rows. A build that also
+carried NVIDIA's io-pgtable-arm contiguous-bit patch measured the same, so no kernel
+code patch is carried. Those runs used a local test key; this release is rebuilt in
+CI with the trusted module signing key. Only `open-64k` was boot- and CUDA-tested;
+the 4 KiB variants are build-verified only.
 
 ## Installer choices
 
 | Variant | CPU pages | Kernel release | NVIDIA source |
 | --- | --- | --- | --- |
-| `proprietary-4k` | 4 KiB | `6.17.13-talos-dgx1022.10-4k` | archive `kernel/` |
-| `open-4k` | 4 KiB | `6.17.13-talos-dgx1022.10-4k` | archive `kernel-open/` |
-| `open-64k` | 64 KiB | `6.17.13-talos-dgx1022.10-64k` | archive `kernel-open/` |
+| `proprietary-4k` | 4 KiB | `6.18.58-talos-dgx1022.11-4k` | archive `kernel/` |
+| `open-4k` | 4 KiB | `6.18.58-talos-dgx1022.11-4k` | archive `kernel-open/` |
+| `open-64k` | 64 KiB | `6.18.58-talos-dgx1022.11-64k` | archive `kernel-open/` |
 
 The two 4 KiB installers share the **same built kernel**, Talos installer base,
 and imager. Only their NVIDIA/GDS extension differs. The 64 KiB kernel is built
 separately, once. Driver and page size are installer-time choices, not a runtime
 page-size switch. `proprietary-64k` is rejected by Make, Bake, and the module script.
-There is no packing-off build variant and no unsuffixed `.10` image alias.
+There is no packing-off build variant and no unsuffixed image alias.
 
 Both open variants apply the same two patches in the same order:
 
@@ -72,20 +77,23 @@ Runtime behavior of newly built variants still needs separate boot/CUDA validati
 
 ## Kernel config policy
 
-- `kernel/config-4k` is the `.1` tag's full config, with only `CONFIG_LOCALVERSION`
-  changed to `-talos-dgx1022.10-4k`.
-- `kernel/config-64k` is the `.5` full config, with only `CONFIG_LOCALVERSION`
-  changed to `-talos-dgx1022.10-64k`.
-- The page configs retain their existing dependent page geometry and Kconfig
-  availability differences. These include page shifts, page-table levels,
-  address randomization limits, huge-page sharing/swap features, and drivers
-  unavailable with 64 KiB pages. No unrelated tuning is added.
+Both configs are Talos v1.14.5's `kernel/build/config-arm64` (siderolabs/pkgs
+`f4bda77`, SHA-256 `4c7fb4e8474318080d9140e1d1f685ce55e4a3a5d1bf4571be616f26b7109587`)
+plus this fragment, then `make olddefconfig` with the pinned toolchain:
+
+- `CONFIG_LOCALVERSION="-talos-dgx1022.11-<page>"`, `CONFIG_LOCALVERSION_AUTO` unset.
+- `CONFIG_MODULE_SIG_KEY="/run/secrets/module_signing_key"`.
+- `CONFIG_ARM_SMMU_V3_SVA=y` (selects `IOMMU_SVA`). Stock Talos leaves it unset;
+  the open driver returned `cuInit` 3 on the stock kernel in the spark-3 A/B.
+- 64 KiB only: `CONFIG_ARM64_64K_PAGES=y` and its Kconfig consequences (3-level
+  page tables, `ARCH_FORCE_MAX_ORDER=13`, smaller mmap randomization, no
+  `VMXNET3`, no THP swap or huge-PMD sharing).
 - **CMA policy is deliberately unchanged:** 128 MiB for 4 KiB, 1024 MiB for
-  64 KiB, matching the previous builds and Ubuntu's `nvidia-64k` policy.
-  This reservation difference must be accounted for in page-size comparisons.
-- Full `olddefconfig` equality is required during each real build. Offline tests
-  also hash both configs against the historical baselines, excluding only the
-  release string. They do not replace the toolchain's Kconfig check.
+  64 KiB (Talos default: 16 MiB). Account for this in page-size comparisons.
+
+No scheduler or tick tuning is carried: `HZ`, `NO_HZ`, preemption, and
+`SCHED_CLUSTER` are Talos's. Full `olddefconfig` equality is required during
+each real build; offline tests check the fragment values only.
 
 64 KiB pages reduce page-descriptor overhead, but also increase minimum allocation
 size and PMD-level huge-page size. Applications and allocators that assume 4 KiB
@@ -170,13 +178,10 @@ successful cache-commit log in real CI.
 
 Each page size gets a separate checkout of pinned Talos commit
 `dad8d3edfe7ca381044d7cad259fdf3030efa700` (v1.14.5) under `.work/talos-<page>`.
-`talos/source.patch` applies common initramfs module-list changes: add `r8127`;
-remove `hkdf`, `libeth_xdp`, `libie_fwlog`, `dwmac-sun55i`, and `pcs-rzn1-miic`.
-It also removes `macsec` and `mscc`, which v1.14.4 added: the kernel configs leave
-`CONFIG_MACSEC` unset and build `CONFIG_MICROSEMI_PHY` in.
-`scripts/prepare-talos.py` then sets the exact page-qualified
-`DefaultKernelVersion`. It retains `vmxnet3` for 4 KiB and removes it for 64 KiB,
-matching the actual kernel configs. Upstream constant/list mismatches fail closed.
+No source patch is applied: Talos's own module list matches Talos's own config.
+`scripts/prepare-talos.py` sets the exact page-qualified `DefaultKernelVersion`.
+It retains `vmxnet3` for 4 KiB and removes it for 64 KiB, matching the actual
+kernel configs. Upstream constant/list mismatches fail closed.
 
 ## Outputs and provenance
 
@@ -212,7 +217,7 @@ Local OCI layouts are kept separately:
 `uname -v` begins with the kernel input fingerprint. The hash covers the selected
 config, kernel patches, marked Linux Dockerfile stages/frontend pin, and kernel
 scripts. It excludes module and installer packaging. Kernel releases explicitly
-end in `-4k` or `-64k`; the release tag is explicitly `v1.14.5-dgx1022.10`, never
+end in `-4k` or `-64k`; the release tag is explicitly `v1.14.5-dgx1022.11`, never
 derived from the final kernel-release component.
 
 `SOURCE_DATE_EPOCH` is the Talos v1.14.5 commit time (`1793020251`). The v1.14.5
@@ -228,7 +233,7 @@ for reproducibility. Existing releases are not replaced by newly timed tarballs.
   `make finalize`. A failed page size can be re-run alone.
 - Manual **branch** dispatch of `build.yaml` builds all choices and uploads the
   nine release assets. It does **not** publish.
-- Pushing the explicit `.10` version tag starts the same build, creates a GitHub
+- Pushing the explicit `v1.14.5-dgx1022.11` tag starts the same build, creates a GitHub
   release if absent, and calls `publish.yaml` once. The tag need not be on `main`.
 - If the release already exists, CI compares its `OCI-DIGESTS` and uses the
   existing release artifacts. It does not overwrite them.
@@ -244,12 +249,12 @@ for reproducibility. Existing releases are not replaced by newly timed tarballs.
 The image tags are:
 
 ```text
-ghcr.io/kindlingai/talos-dgx-kernel/installer:v1.14.5-dgx1022.10-proprietary-4k
-ghcr.io/kindlingai/talos-dgx-kernel/installer:v1.14.5-dgx1022.10-open-4k
-ghcr.io/kindlingai/talos-dgx-kernel/installer:v1.14.5-dgx1022.10-open-64k
+ghcr.io/kindlingai/talos-dgx-kernel/installer:v1.14.5-dgx1022.11-proprietary-4k
+ghcr.io/kindlingai/talos-dgx-kernel/installer:v1.14.5-dgx1022.11-open-4k
+ghcr.io/kindlingai/talos-dgx-kernel/installer:v1.14.5-dgx1022.11-open-64k
 ```
 
-There is **no unsuffixed alias**. Existing `.5` through `.9` tags are outside this branch's
+There is **no unsuffixed alias**. Existing `.5` through `.10` tags are outside this branch's
 publication scope. `make release` requires an existing Git tag and refuses to
 replace a release. `make push IMAGE=<registry/repository>` applies the same
 three suffixes and no-overwrite checks. It requires registry authentication.
@@ -263,7 +268,7 @@ Choose the matching ISO or installer tag, then pin the published image digest in
 ```yaml
 machine:
   install:
-    image: ghcr.io/kindlingai/talos-dgx-kernel/installer:v1.14.5-dgx1022.10-open-64k@sha256:<published-digest>
+    image: ghcr.io/kindlingai/talos-dgx-kernel/installer:v1.14.5-dgx1022.11-open-64k@sha256:<published-digest>
 ```
 
 When packages are private, configure `machine.registries.config` credentials.

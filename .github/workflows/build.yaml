@@ -30,7 +30,7 @@ jobs:
 
       - name: Validate release tag
         if: github.ref_type == 'tag'
-        run: test "${GITHUB_REF_NAME}" = v1.14.5-dgx1022.10
+        run: test "${GITHUB_REF_NAME}" = v1.14.5-dgx1022.11
 
       # One persisted builder per page size, so concurrent jobs never share a cache disk.
       - name: Set up persisted Blacksmith builder

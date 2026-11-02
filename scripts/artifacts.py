@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Record and verify the exact .10 artifact matrix (stdlib only; no private keys)."""
+"""Record and verify the exact dgx1022.11 artifact matrix (stdlib only; no private keys)."""
 import hashlib
 import json
 import os
@@ -9,7 +9,7 @@ import subprocess
 import sys
 
 ROOT = Path(__file__).resolve().parents[1]
-TAG = "v1.14.5-dgx1022.10"
+TAG = "v1.14.5-dgx1022.11"
 VARIANTS = ("proprietary-4k", "open-4k", "open-64k")
 PATCHES = ("0001-nvidia-uvm-flush-gpu-tlb-after-hub-ats-faults.patch",
            "0002-nvidia-uvm-pack-user-leaf-page-tables.patch")
@@ -62,12 +62,11 @@ def shared_identity(out, variant):
     fingerprint = subprocess.check_output([sys.executable, str(ROOT / "scripts/kernel-fingerprint.py"), "kernel/config-" + page], text=True).strip()
     return {
         "page_size": page,
-        "kernel_release": "6.17.13-talos-dgx1022.10-" + page,
+        "kernel_release": "6.18.58-talos-dgx1022.11-" + page,
         "kernel_build_fingerprint": fingerprint,
         "kernel_config_sha256": sha(ROOT / ("kernel/config-" + page)),
         "module_signing_certificate_sha256": certificate,
         "talos_commit": TALOS_COMMIT,
-        "talos_source_patch_sha256": sha(ROOT / "talos/source.patch"),
         "talos_prepare_script_sha256": sha(ROOT / "scripts/prepare-talos.py"),
         "kernel_oci_digest": oci_digest(out, "kernels/" + page),
         "installer_base_oci_digest": oci_digest(out, "talos/" + page + "/installer-base"),
@@ -105,7 +104,7 @@ def validate_records(records):
         driver, page = variant.split("-")
         require(record["tag"] == TAG, "Wrong release tag")
         require(record["driver"] == driver and record["page_size"] == page, "Wrong driver/page mapping")
-        require(record["kernel_release"] == "6.17.13-talos-dgx1022.10-" + page, "Wrong kernel release")
+        require(record["kernel_release"] == "6.18.58-talos-dgx1022.11-" + page, "Wrong kernel release")
         require(record["talos_version"] == "v1.14.5" and record["talos_commit"] == TALOS_COMMIT, "Wrong Talos pin")
         require(record["nvidia_version"] == "580.178.04" and record["gds_version"] == "2.29.4", "Wrong driver pins")
         require(record["driver_source_directory"] == ("kernel-open" if driver == "open" else "kernel"), "Wrong driver source")

@@ -14,8 +14,8 @@ variable "TALOS_VERSION" {}
 variable "TALOS_COMMIT" {}
 variable "KERNEL_RELEASE" {
   validation {
-    condition = KERNEL_RELEASE == "6.17.13-talos-dgx1022.10-${KERNEL_PAGE_SIZE}"
-    error_message = "KERNEL_RELEASE must match the selected .10 page geometry"
+    condition = KERNEL_RELEASE == "6.18.58-talos-dgx1022.11-${KERNEL_PAGE_SIZE}"
+    error_message = "KERNEL_RELEASE must match the selected dgx1022.11 page geometry"
   }
 }
 variable "KERNEL_CONFIG" {
