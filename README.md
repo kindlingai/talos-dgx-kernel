@@ -15,15 +15,6 @@ kernel patches (both `.9` CVE fixes are already in 6.18.58), the out-of-tree `r8
 driver (6.18.58's `r8169` drives the RTL8127A), and `talos/source.patch` are gone.
 The `dgx1022` series name is kept for continuity; it no longer refers to the Ubuntu ABI.
 
-Measured on spark-3 against `.10` and stock Talos v1.14.5 (open-64k, vLLM
-Qwen3.8-Flash-Next-NVFP4, two power-cycled boots each, sparkDash/RigMark/rothgar;
-vault note "Spark-3 Kernel AB Results"): this build decodes within -2.4% to +4.1% of
-`.10` and 8.9-16.2% faster than stock Talos on all 14 decode rows. A build that also
-carried NVIDIA's io-pgtable-arm contiguous-bit patch measured the same, so no kernel
-code patch is carried. Those runs used a local test key; this release is rebuilt in
-CI with the trusted module signing key. Only `open-64k` was boot- and CUDA-tested;
-the 4 KiB variants are build-verified only.
-
 ## Installer choices
 
 | Variant | CPU pages | Kernel release | NVIDIA source |
