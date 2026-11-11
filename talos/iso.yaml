@@ -18,6 +18,7 @@ input:
     - ociPath: /oci/variants/@VARIANT@/nvidia-extension
     - ociPath: /oci/common/dispram-extension
     - ociPath: /oci/common/toolkit-extension
+    - ociPath: /oci/common/fabric-extension
 output:
   kind: iso
   outFormat: raw

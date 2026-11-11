@@ -54,7 +54,7 @@ BAKE := docker buildx bake --builder $(BUILDER) --progress $(PROGRESS) --allow f
 IMAGER_RUN := docker run --rm -i --env SOURCE_DATE_EPOCH \
 	--volume $(OUT)/oci:/oci:ro --volume $(VARIANT_OUT):/out $(IMAGER) - --output /out
 
-.PHONY: all page finalize variant package builder signing-key check-signing-key kernel dispram toolkit talos-source talos installer iso push release test cache-usage print-variant verify
+.PHONY: all page finalize variant package builder signing-key check-signing-key kernel dispram toolkit fabric talos-source talos installer iso push release test cache-usage print-variant verify
 
 # Intentionally ordered even under make -j: no dual 16-worker Linux compiles.
 all:
@@ -67,6 +67,7 @@ page:
 	@case "$(PAGE)" in 4k|64k) ;; *) echo "Unsupported PAGE=$(PAGE); choose 4k or 64k" >&2; exit 1;; esac
 	$(MAKE) dispram
 	$(MAKE) toolkit
+	$(MAKE) fabric
 	$(MAKE) talos VARIANT=open-$(PAGE)
 	for variant in $(filter %-$(PAGE),$(VARIANTS)); do $(MAKE) package VARIANT=$$variant || exit; done
 
@@ -76,7 +77,7 @@ finalize:
 	$(MAKE) verify
 
 # Optional bounded single-variant build. `make` remains the full release matrix.
-variant: dispram toolkit talos
+variant: dispram toolkit fabric talos
 	$(MAKE) package VARIANT=$(VARIANT)
 
 builder:
@@ -104,6 +105,9 @@ dispram: builder
 
 toolkit: builder
 	$(BAKE) toolkit-extension
+
+fabric: builder
+	$(BAKE) fabric-extension
 
 talos-source: $(TALOS_SRC)/.git/talos-dgx-kernel-$(TALOS_COMMIT)-$(KERNEL_RELEASE)
 $(TALOS_SRC)/.git/talos-dgx-kernel-$(TALOS_COMMIT)-$(KERNEL_RELEASE): scripts/prepare-talos.py
