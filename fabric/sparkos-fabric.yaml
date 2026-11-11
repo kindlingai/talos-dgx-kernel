@@ -1,0 +1,10 @@
+# Talos extension service: sparkos-fabric gives the ConnectX netdevs their fabric addresses from
+# what each cable reaches, found by LLDP. Talos runs extension services in the host network
+# namespace with all capabilities, which raw LLDP/ARP sockets and address changes need.
+name: sparkos-fabric
+container:
+  entrypoint: /sparkos-fabric
+depends:
+  # On only on nodes whose machine config has an ExtensionServiceConfig named sparkos-fabric.
+  - configuration: true
+restart: always

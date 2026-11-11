@@ -45,8 +45,9 @@ Both open variants apply the same two patches in the same order:
 Each extension builds GDS against the matching driver's `Module.symvers` and
 headers. Open extensions use `nvidia-open-gpu-kernel-modules-lts`; proprietary
 uses `nvidia-gpu-kernel-modules-lts`. Manifests and SPDX documents name the variant.
-All installers also include the same [dispram service](dispram/README.md) and
-`nvidia-container-toolkit-lts` extension. The toolkit extension is the pinned Sidero
+All installers also include the same [dispram service](dispram/README.md),
+[sparkos-fabric service](fabric/README.md) (off until a node's machine config turns it on),
+and `nvidia-container-toolkit-lts` extension. The toolkit extension is the pinned Sidero
 Labs image with two startup fixes, built from `toolkit/`:
 
 - **nvidia-persistenced waits for the driver and is restarted when it fails.**
@@ -117,7 +118,7 @@ into a layer, compiler cache, or uploaded artifact. `CONFIG_MODULE_SIG_KEY` stay
 `make` runs `make page PAGE=4k`, then `make page PAGE=64k`, then `make finalize`,
 in order, even under `make -j`:
 
-1. `page` builds the common dispram and nvidia-container-toolkit-lts extensions.
+1. `page` builds the common dispram, nvidia-container-toolkit-lts, and sparkos-fabric extensions.
 2. It builds/exports that page size's kernel and its Talos installer base/imager.
 3. It packages each of that page size's variants: proprietary then open for 4 KiB,
    sharing one kernel export; open only for 64 KiB.
@@ -204,6 +205,7 @@ Local OCI layouts are kept separately:
 - `_out/oci/variants/<variant>/nvidia-extension`
 - `_out/oci/common/dispram-extension`
 - `_out/oci/common/toolkit-extension`
+- `_out/oci/common/fabric-extension`
 
 `uname -v` begins with the kernel input fingerprint. The hash covers the selected
 config, kernel patches, marked Linux Dockerfile stages/frontend pin, and kernel
