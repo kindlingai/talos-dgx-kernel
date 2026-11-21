@@ -106,6 +106,15 @@ target "dispram-extension" {
   output   = ["type=oci,tar=false,rewrite-timestamp=true,dest=${OUT}/oci/common/dispram-extension"]
 }
 
+target "fabric-extension" {
+  inherits   = ["_reproducible"]
+  context    = "."
+  dockerfile = "Dockerfile"
+  platforms  = ["linux/arm64"]
+  target     = "fabric-extension"
+  output     = ["type=oci,tar=false,rewrite-timestamp=true,dest=${OUT}/oci/common/fabric-extension"]
+}
+
 target "toolkit-extension" {
   inherits   = ["_reproducible"]
   context    = "."

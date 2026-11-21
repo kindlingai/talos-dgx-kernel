@@ -6,6 +6,7 @@
 #   kernel             Talos PKG_KERNEL image
 #   nvidia-extension   Talos system extension with selected NVIDIA GPU and GDS modules
 #   dispram-extension  Talos system extension running dispramd (see dispram/README.md)
+#   fabric-extension   Talos system extension running sparkos-fabric (see fabric/README.md)
 #   toolkit-extension  Sidero Labs nvidia-container-toolkit-lts with fixed service startup
 #
 # docker-bake.hcl supplies the build arguments and the module signing key.
@@ -131,6 +132,20 @@ RUN --mount=type=bind,from=validator,source=/extensions-validator,target=/usr/lo
 
 FROM scratch AS dispram-extension
 COPY --link --from=dispram-check /extension/ /
+
+# sparkos-fabric runs on the node, so it builds with the target platform's musl toolchain.
+FROM ${TOOLS_IMAGE} AS fabric-build
+RUN --mount=type=bind,source=scripts/build-fabric.sh,target=/scripts/build-fabric.sh \
+    --mount=type=bind,source=fabric,target=/fabric \
+    /scripts/build-fabric.sh /fabric /extension
+
+FROM toolchain AS fabric-check
+COPY --from=fabric-build /extension/ /extension/
+RUN --mount=type=bind,from=validator,source=/extensions-validator,target=/usr/local/bin/extensions-validator \
+    extensions-validator validate --rootfs=/extension --pkg-name=sparkos-fabric
+
+FROM scratch AS fabric-extension
+COPY --link --from=fabric-check /extension/ /
 
 FROM ${TOOLKIT_IMAGE} AS toolkit-upstream
 
