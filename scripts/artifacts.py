@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Record and verify the exact dgx1022.11 artifact matrix (stdlib only; no private keys)."""
+"""Record and verify the exact dgx1022.12 artifact matrix (stdlib only; no private keys)."""
 import hashlib
 import json
 import os
@@ -9,11 +9,11 @@ import subprocess
 import sys
 
 ROOT = Path(__file__).resolve().parents[1]
-TAG = "v1.14.5-dgx1022.11"
+TAG = "v1.14.7-dgx1022.12"
 VARIANTS = ("proprietary-4k", "open-4k", "open-64k")
 PATCHES = ("0001-nvidia-uvm-flush-gpu-tlb-after-hub-ats-faults.patch",
            "0002-nvidia-uvm-pack-user-leaf-page-tables.patch")
-TALOS_COMMIT = "dad8d3edfe7ca381044d7cad259fdf3030efa700"
+TALOS_COMMIT = "55021d7c274f6bc207bf18efa2a684a31a35cd9f"
 
 
 def require(condition, message):
@@ -62,7 +62,7 @@ def shared_identity(out, variant):
     fingerprint = subprocess.check_output([sys.executable, str(ROOT / "scripts/kernel-fingerprint.py"), "kernel/config-" + page], text=True).strip()
     return {
         "page_size": page,
-        "kernel_release": "6.18.58-talos-dgx1022.11-" + page,
+        "kernel_release": "6.18.65-talos-dgx1022.12-" + page,
         "kernel_build_fingerprint": fingerprint,
         "kernel_config_sha256": sha(ROOT / ("kernel/config-" + page)),
         "module_signing_certificate_sha256": certificate,
@@ -85,10 +85,10 @@ def record_variant(out, variant):
     driver = variant.split("-")[0]
     patches = PATCHES if driver == "open" else ()
     record = dict(shared, variant=variant, driver=driver, tag=TAG,
-                  talos_version="v1.14.5", nvidia_version="580.178.04", gds_version="2.29.4",
+                  talos_version="v1.14.7", nvidia_version="580.178.04", gds_version="2.29.4",
                   driver_source_directory="kernel-open" if driver == "open" else "kernel",
                   source_commit=subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=ROOT, text=True).strip(),
-                  source_date_epoch=1793020251,
+                  source_date_epoch=1795517430,
                   patches={name: sha(ROOT / "extension/patches" / name) for name in patches},
                   nvidia_oci_digest=oci_digest(out, "variants/" + variant + "/nvidia-extension"),
                   dispram_oci_digest=oci_digest(out, "common/dispram-extension"),
@@ -105,8 +105,8 @@ def validate_records(records):
         driver, page = variant.split("-")
         require(record["tag"] == TAG, "Wrong release tag")
         require(record["driver"] == driver and record["page_size"] == page, "Wrong driver/page mapping")
-        require(record["kernel_release"] == "6.18.58-talos-dgx1022.11-" + page, "Wrong kernel release")
-        require(record["talos_version"] == "v1.14.5" and record["talos_commit"] == TALOS_COMMIT, "Wrong Talos pin")
+        require(record["kernel_release"] == "6.18.65-talos-dgx1022.12-" + page, "Wrong kernel release")
+        require(record["talos_version"] == "v1.14.7" and record["talos_commit"] == TALOS_COMMIT, "Wrong Talos pin")
         require(record["nvidia_version"] == "580.178.04" and record["gds_version"] == "2.29.4", "Wrong driver pins")
         require(record["driver_source_directory"] == ("kernel-open" if driver == "open" else "kernel"), "Wrong driver source")
         require(record["kernel_config_sha256"] == sha(ROOT / ("kernel/config-" + page)), "Config provenance differs from release source")
@@ -188,7 +188,7 @@ def main():
         print("Verified all three variants, shared 4 KiB kernel, and checksums" + (" (installer-only download)" if args else ""))
     elif command == "notes":
         records = verify(out)
-        print(f"Talos v1.14.5 / NVIDIA 580.178.04 / GDS 2.29.4 — {TAG}\n")
+        print(f"Talos v1.14.7 / NVIDIA 580.178.04 / GDS 2.29.4 — {TAG}\n")
         for r in records:
             print(f"- **{r['variant']}**: `{r['kernel_release']}`, `uname -v` `#{r['kernel_build_fingerprint']}`; image tag `{TAG}-{r['variant']}`.")
         print("\nOpen variants include HUB ATS and leaf-table packing patches. Packing is inert at 4 KiB.")

@@ -1,27 +1,33 @@
 # Talos DGX kernel
 
-Talos **v1.14.5** for NVIDIA DGX Spark (arm64), release **v1.14.5-dgx1022.11**.
-Linux is Talos v1.14.5's own kernel, unmodified: kernel.org **6.18.58** with the
-siderolabs/pkgs `release-1.14` patches at `f4bda77` (PKGS `v1.14.0-48-gf4bda77`).
+Talos **v1.14.7** for NVIDIA DGX Spark (arm64), release **v1.14.7-dgx1022.12**.
+Linux is Talos v1.14.7's own kernel, unmodified: kernel.org **6.18.65** with the
+siderolabs/pkgs `release-1.14` patches at `a1a4897` (PKGS `v1.14.0-66-ga1a4897`).
 `kernel/patches/` is empty. Only the kernel config differs from stock Talos (see
 [Kernel config policy](#kernel-config-policy)). NVIDIA stays **580.178.04** and
 GPUDirect Storage stays **2.29.4**. The toolchain, security config, BTF, and
 signing checks remain enabled.
 
-`.11` replaces the Ubuntu `linux-nvidia-6.17` 6.17.0-1022.22 base used through
+`.12` rebases `.11` on Talos v1.14.7: Linux 6.18.58 → 6.18.65, and Talos's kernel
+patches and config move from pkgs `f4bda77` to `a1a4897` (two virtio UDP-tunnel GSO
+fixes; `MEMORY_FAILURE`, `I40E_DCB`, `ionic`/`ionic_rdma`, FF-A TPM CRB, and
+`ARM_SMMU_V3_SVA` enabled). NVIDIA, GDS, the toolkit pin, and the extension sources
+are unchanged; Talos v1.14.7's own NVIDIA extensions moved to 580.196.07.
+
+`.11` replaced the Ubuntu `linux-nvidia-6.17` 6.17.0-1022.22 base used through
 `.10`. Ubuntu ended that branch in August 2026, so it no longer receives security
 fixes; Talos's 6.18 LTS kernel does. The rest of the Ubuntu diff, the 22 Ubuntu-era
-kernel patches (both `.9` CVE fixes are already in 6.18.58), the out-of-tree `r8127`
-driver (6.18.58's `r8169` drives the RTL8127A), and `talos/source.patch` are gone.
+kernel patches, the out-of-tree `r8127` driver (6.18's `r8169` drives the RTL8127A),
+and `talos/source.patch` are gone.
 The `dgx1022` series name is kept for continuity; it no longer refers to the Ubuntu ABI.
 
 ## Installer choices
 
 | Variant | CPU pages | Kernel release | NVIDIA source |
 | --- | --- | --- | --- |
-| `proprietary-4k` | 4 KiB | `6.18.58-talos-dgx1022.11-4k` | archive `kernel/` |
-| `open-4k` | 4 KiB | `6.18.58-talos-dgx1022.11-4k` | archive `kernel-open/` |
-| `open-64k` | 64 KiB | `6.18.58-talos-dgx1022.11-64k` | archive `kernel-open/` |
+| `proprietary-4k` | 4 KiB | `6.18.65-talos-dgx1022.12-4k` | archive `kernel/` |
+| `open-4k` | 4 KiB | `6.18.65-talos-dgx1022.12-4k` | archive `kernel-open/` |
+| `open-64k` | 64 KiB | `6.18.65-talos-dgx1022.12-64k` | archive `kernel-open/` |
 
 The two 4 KiB installers share the **same built kernel**, Talos installer base,
 and imager. Only their NVIDIA/GDS extension differs. The 64 KiB kernel is built
@@ -69,14 +75,12 @@ Runtime behavior of newly built variants still needs separate boot/CUDA validati
 
 ## Kernel config policy
 
-Both configs are Talos v1.14.5's `kernel/build/config-arm64` (siderolabs/pkgs
-`f4bda77`, SHA-256 `4c7fb4e8474318080d9140e1d1f685ce55e4a3a5d1bf4571be616f26b7109587`)
+Both configs are Talos v1.14.7's `kernel/build/config-arm64` (siderolabs/pkgs
+`a1a4897`, SHA-256 `c6d3a39cd42d2523ea2a60bf12d20605c0ba177cafe8781c11dfb5a393e11d82`)
 plus this fragment, then `make olddefconfig` with the pinned toolchain:
 
-- `CONFIG_LOCALVERSION="-talos-dgx1022.11-<page>"`, `CONFIG_LOCALVERSION_AUTO` unset.
+- `CONFIG_LOCALVERSION="-talos-dgx1022.12-<page>"`, `CONFIG_LOCALVERSION_AUTO` unset.
 - `CONFIG_MODULE_SIG_KEY="/run/secrets/module_signing_key"`.
-- `CONFIG_ARM_SMMU_V3_SVA=y` (selects `IOMMU_SVA`). Stock Talos leaves it unset;
-  the open driver returned `cuInit` 3 on the stock kernel in the spark-3 A/B.
 - 64 KiB only: `CONFIG_ARM64_64K_PAGES=y` and its Kconfig consequences (3-level
   page tables, `ARCH_FORCE_MAX_ORDER=13`, smaller mmap randomization, no
   `VMXNET3`, no THP swap or huge-PMD sharing).
@@ -86,6 +90,11 @@ plus this fragment, then `make olddefconfig` with the pinned toolchain:
 No scheduler or tick tuning is carried: `HZ`, `NO_HZ`, preemption, and
 `SCHED_CLUSTER` are Talos's. Full `olddefconfig` equality is required during
 each real build; offline tests check the fragment values only.
+
+`CONFIG_ARM_SMMU_V3_SVA=y` (selects `IOMMU_SVA`) is required by the open driver:
+without it, `cuInit` returned 3 in the spark-3 A/B. `.11` set it in the fragment;
+Talos enables it itself since pkgs `52e7730`, so the fragment no longer does.
+The offline tests still require it in both configs.
 
 64 KiB pages reduce page-descriptor overhead, but also increase minimum allocation
 size and PMD-level huge-page size. Applications and allocators that assume 4 KiB
@@ -169,7 +178,7 @@ successful cache-commit log in real CI.
 ### Talos source adaptation
 
 Each page size gets a separate checkout of pinned Talos commit
-`dad8d3edfe7ca381044d7cad259fdf3030efa700` (v1.14.5) under `.work/talos-<page>`.
+`55021d7c274f6bc207bf18efa2a684a31a35cd9f` (v1.14.7) under `.work/talos-<page>`.
 No source patch is applied: Talos's own module list matches Talos's own config.
 `scripts/prepare-talos.py` sets the exact page-qualified `DefaultKernelVersion`.
 It retains `vmxnet3` for 4 KiB and removes it for 64 KiB, matching the actual
@@ -210,10 +219,10 @@ Local OCI layouts are kept separately:
 `uname -v` begins with the kernel input fingerprint. The hash covers the selected
 config, kernel patches, marked Linux Dockerfile stages/frontend pin, and kernel
 scripts. It excludes module and installer packaging. Kernel releases explicitly
-end in `-4k` or `-64k`; the release tag is explicitly `v1.14.5-dgx1022.11`, never
+end in `-4k` or `-64k`; the release tag is explicitly `v1.14.7-dgx1022.12`, never
 derived from the final kernel-release component.
 
-`SOURCE_DATE_EPOCH` is the Talos v1.14.5 commit time (`1793020251`). The v1.14.5
+`SOURCE_DATE_EPOCH` is the Talos v1.14.7 commit time (`1795517430`). The v1.14.7
 imager applies it to installer image creation time and rebuilt extension archive
 mtimes; byte-identical installers and ISOs across runs are not yet verified.
 `SHA256SUMS` identifies one run's exact files; compare `OCI-DIGESTS` between runs
@@ -226,7 +235,7 @@ for reproducibility. Existing releases are not replaced by newly timed tarballs.
   `make finalize`. A failed page size can be re-run alone.
 - Manual **branch** dispatch of `build.yaml` builds all choices and uploads the
   nine release assets. It does **not** publish.
-- Pushing the explicit `v1.14.5-dgx1022.11` tag starts the same build, creates a GitHub
+- Pushing the explicit `v1.14.7-dgx1022.12` tag starts the same build, creates a GitHub
   release if absent, and calls `publish.yaml` once. The tag need not be on `main`.
 - If the release already exists, CI compares its `OCI-DIGESTS` and uses the
   existing release artifacts. It does not overwrite them.
@@ -242,12 +251,12 @@ for reproducibility. Existing releases are not replaced by newly timed tarballs.
 The image tags are:
 
 ```text
-ghcr.io/kindlingai/talos-dgx-kernel/installer:v1.14.5-dgx1022.11-proprietary-4k
-ghcr.io/kindlingai/talos-dgx-kernel/installer:v1.14.5-dgx1022.11-open-4k
-ghcr.io/kindlingai/talos-dgx-kernel/installer:v1.14.5-dgx1022.11-open-64k
+ghcr.io/kindlingai/talos-dgx-kernel/installer:v1.14.7-dgx1022.12-proprietary-4k
+ghcr.io/kindlingai/talos-dgx-kernel/installer:v1.14.7-dgx1022.12-open-4k
+ghcr.io/kindlingai/talos-dgx-kernel/installer:v1.14.7-dgx1022.12-open-64k
 ```
 
-There is **no unsuffixed alias**. Existing `.5` through `.10` tags are outside this branch's
+There is **no unsuffixed alias**. Existing `.5` through `.11` tags are outside this branch's
 publication scope. `make release` requires an existing Git tag and refuses to
 replace a release. `make push IMAGE=<registry/repository>` applies the same
 three suffixes and no-overwrite checks. It requires registry authentication.
@@ -261,7 +270,7 @@ Choose the matching ISO or installer tag, then pin the published image digest in
 ```yaml
 machine:
   install:
-    image: ghcr.io/kindlingai/talos-dgx-kernel/installer:v1.14.5-dgx1022.11-open-64k@sha256:<published-digest>
+    image: ghcr.io/kindlingai/talos-dgx-kernel/installer:v1.14.7-dgx1022.12-open-64k@sha256:<published-digest>
 ```
 
 When packages are private, configure `machine.registries.config` credentials.

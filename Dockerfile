@@ -18,13 +18,13 @@ ARG TOOLKIT_IMAGE=ghcr.io/siderolabs/nvidia-container-toolkit-lts@sha256:ee78d32
 ARG LLVM_IMAGE=ghcr.io/siderolabs/llvm@sha256:251882062d6ce367b3125bf50e64db69e42e09ddc03003d4a37b75c482f46496
 ARG TOOLS_IMAGE=ghcr.io/siderolabs/tools@sha256:ad7d2319c0c88f81da2a6ed425515ab2898d3054e0dfe63c056eb06133e2722b
 
-# Talos v1.14.5 builds kernel.org 6.18.58 with the siderolabs/pkgs release-1.14
-# patches at f4bda77 (PKGS v1.14.0-48-gf4bda77). kernel/patches adds ours on top.
+# Talos v1.14.7 builds kernel.org 6.18.65 with the siderolabs/pkgs release-1.14
+# patches at a1a4897 (PKGS v1.14.0-66-ga1a4897). kernel/patches adds ours on top.
 FROM scratch AS linux-downloads
-ADD --checksum=sha256:069b19f9032c4dac8149ae4b6520c35debca0f42a9f6d52ee55ba6ca9b818013 \
-    https://cdn.kernel.org/pub/linux/kernel/v6.x/linux-6.18.58.tar.xz /linux.tar.xz
-ADD --checksum=f4bda77bb9f8202cac8443a7284ce1c7aa129f38 \
-    https://github.com/siderolabs/pkgs.git#f4bda77bb9f8202cac8443a7284ce1c7aa129f38:kernel/build/patches /talos-patches
+ADD --checksum=sha256:c92606f956f09dc50b5a0e2af9e86763fce27ada1647de97f8d1ac8cfc95801d \
+    https://cdn.kernel.org/pub/linux/kernel/v6.x/linux-6.18.65.tar.xz /linux.tar.xz
+ADD --checksum=a1a4897db70d69ca5b2d8466668b5d3f7d405840 \
+    https://github.com/siderolabs/pkgs.git#a1a4897db70d69ca5b2d8466668b5d3f7d405840:kernel/build/patches /talos-patches
 
 FROM --platform=$BUILDPLATFORM ${LLVM_IMAGE} AS llvm
 

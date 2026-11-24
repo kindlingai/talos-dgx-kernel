@@ -77,8 +77,8 @@ class VariantContract(unittest.TestCase):
                      ("VARIANT=open-64k-packing-off",), ("VARIANT=../open-4k",),
                      ("VARIANT=proprietary-4k", "KERNEL_PAGE_SIZE=64k"),
                      ("VARIANT=open-64k", "KERNEL_CONFIG=kernel/config-4k"),
-                     ("VARIANT=open-4k", "KERNEL_RELEASE=6.18.58-talos-dgx1022.11-64k"),
-                     ("TAG=v1.14.4-dgx1022.9",)):
+                     ("VARIANT=open-4k", "KERNEL_RELEASE=6.18.65-talos-dgx1022.12-64k"),
+                     ("TAG=v1.14.5-dgx1022.11",)):
             with self.subTest(args=args):
                 result = make("print-variant", *args)
                 self.assertNotEqual(result.returncode, 0)
@@ -108,8 +108,8 @@ class VariantContract(unittest.TestCase):
         self.assertIn(".NOTPARALLEL:", (ROOT / "Makefile").read_text())
 
     def test_configs_are_talos_config_plus_our_fragment(self):
-        # Talos v1.14.5 kernel/build/config-arm64 at siderolabs/pkgs f4bda77.
-        talos_sha256 = "4c7fb4e8474318080d9140e1d1f685ce55e4a3a5d1bf4571be616f26b7109587"
+        # Talos v1.14.7 kernel/build/config-arm64 at siderolabs/pkgs a1a4897.
+        talos_sha256 = "c6d3a39cd42d2523ea2a60bf12d20605c0ba177cafe8781c11dfb5a393e11d82"
         expected = {
             "4k": {"ARM_SMMU_V3_SVA": "y", "IOMMU_SVA": "y", "CMA_SIZE_MBYTES": "128", "ARM64_4K_PAGES": "y"},
             "64k": {"ARM_SMMU_V3_SVA": "y", "IOMMU_SVA": "y", "CMA_SIZE_MBYTES": "1024", "ARM64_64K_PAGES": "y",
@@ -117,7 +117,7 @@ class VariantContract(unittest.TestCase):
         }
         for page, values in expected.items():
             text = (ROOT / ("kernel/config-" + page)).read_text()
-            self.assertIn(f'CONFIG_LOCALVERSION="-talos-dgx1022.11-{page}"', text)
+            self.assertIn(f'CONFIG_LOCALVERSION="-talos-dgx1022.12-{page}"', text)
             self.assertIn('CONFIG_CC_VERSION_TEXT="clang version 22.1.8"', text)
             for name, value in values.items():
                 self.assertIn(f"CONFIG_{name}={value}\n", text)
@@ -147,7 +147,7 @@ class VariantContract(unittest.TestCase):
             text = (ROOT / "extension" / variant / "manifest.yaml").read_text()
             page = art.page_of(variant)
             self.assertIn(art.TAG + "-" + variant, text)
-            self.assertIn("6.18.58-talos-dgx1022.11-" + page, text)
+            self.assertIn("6.18.65-talos-dgx1022.12-" + page, text)
             spdx = json.loads((ROOT / "extension" / variant / "nvidia.spdx.json").read_text())
             self.assertIn("-" + page, spdx["documentNamespace"])
             self.assertEqual(spdx["packages"][0]["versionInfo"], "580.178.04")
@@ -175,11 +175,11 @@ class VariantContract(unittest.TestCase):
                 source = Path(temp)
                 constant = source / "pkg/machinery/constants/constants.go"
                 constant.parent.mkdir(parents=True)
-                constant.write_text('DefaultKernelVersion = "6.18.58-talos"\n')
+                constant.write_text('DefaultKernelVersion = "6.18.65-talos"\n')
                 modules = source / "hack/modules-arm64.txt"
                 modules.parent.mkdir()
                 modules.write_text("kernel/drivers/net/vmxnet3/vmxnet3.ko\n")
-                release = "6.18.58-talos-dgx1022.11-" + page
+                release = "6.18.65-talos-dgx1022.12-" + page
                 subprocess.run([sys.executable, str(ROOT / "scripts/prepare-talos.py"), str(source), release, page], check=True)
                 self.assertIn(release, constant.read_text())
                 self.assertEqual("vmxnet3" in modules.read_text(), page == "4k")
@@ -190,9 +190,9 @@ class VariantContract(unittest.TestCase):
         env = dict(os.environ)
         for variant in art.VARIANTS:
             driver, page = variant.split("-")
-            env = dict(os.environ, OUT=str(ROOT / "_out"), TALOS_SRC=str(ROOT / (".work/talos-" + page)), TALOS_VERSION="v1.14.5", TALOS_COMMIT=art.TALOS_COMMIT,
-                       KERNEL_RELEASE="6.18.58-talos-dgx1022.11-" + page, KERNEL_CONFIG="kernel/config-" + page,
-                       KERNEL_PAGE_SIZE=page, DRIVER_FLAVOR=driver, VARIANT=variant, SOURCE_DATE_EPOCH="1793020251",
+            env = dict(os.environ, OUT=str(ROOT / "_out"), TALOS_SRC=str(ROOT / (".work/talos-" + page)), TALOS_VERSION="v1.14.7", TALOS_COMMIT=art.TALOS_COMMIT,
+                       KERNEL_RELEASE="6.18.65-talos-dgx1022.12-" + page, KERNEL_CONFIG="kernel/config-" + page,
+                       KERNEL_PAGE_SIZE=page, DRIVER_FLAVOR=driver, VARIANT=variant, SOURCE_DATE_EPOCH="1795517430",
                        SIGNING_KEY="/dev/null", MODULE_SIGNING_CERT_SHA256="a" * 64, KBUILD_BUILD_VERSION="offline-" + page)
             result = subprocess.run(["docker", "buildx", "bake", "--print", "kernel", "nvidia-extension", "dispram-extension", "toolkit-extension", "fabric-extension"], cwd=ROOT, env=env, capture_output=True, text=True)
             self.assertEqual(result.returncode, 0, result.stderr)
@@ -366,4 +366,4 @@ class ArtifactContract(unittest.TestCase):
                 self.assertEqual(len(output.call_args_list), 6)  # local digest + remote read-back per variant
                 self.assertEqual(len((out / "INSTALLER-REFS").read_text().splitlines()), 3)
             with self.assertRaisesRegex(ValueError, "only publishes"):
-                publisher.publish(out, "example.test/installer", "v1.14.4-dgx1022.9")
+                publisher.publish(out, "example.test/installer", "v1.14.5-dgx1022.11")
